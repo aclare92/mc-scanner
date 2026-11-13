@@ -128,9 +128,23 @@ fun getHaystack(path: Path): Set<Scannable> {
     if (Files.isRegularFile(path) && path.fileName.toString().endsWith(".mca")) {
         return setOf(RegionFile(path))
     }
-    val playerDataPath = path.resolve("playerdata")
-    if (Files.exists(playerDataPath)) {
-        Files.list(playerDataPath).forEach {
+
+    fun addRegionFiles(dir: Path) {
+        if (!Files.isDirectory(dir)) return
+        Files.list(dir).forEach {
+            if (it.fileName.toString().endsWith(".mca")) {
+                try {
+                    haystack.add(RegionFile(it))
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+    }
+
+    fun addPlayerFiles(dir: Path) {
+        if (!Files.isDirectory(dir)) return
+        Files.list(dir).forEach {
             val fileName = it.fileName.toString()
             if (fileName.endsWith(".dat") && fileName.split('-').size == 5) {
                 try {
@@ -141,21 +155,28 @@ fun getHaystack(path: Path): Set<Scannable> {
             }
         }
     }
-    for (dim in listOf(".", "DIM-1", "DIM1")) {
-        val dimPath = path.resolve(dim)
-        if (!Files.exists(dimPath)) continue
-        val dimRegionPath = dimPath.resolve("region")
-        if (!Files.exists(dimRegionPath)) continue
-        Files.list(dimRegionPath).forEach {
-            if (it.fileName.toString().endsWith(".mca")) {
-                try {
-                    haystack.add(RegionFile(it))
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
+
+    // Players: 26.1+ uses players/data; earlier versions use playerdata.
+    addPlayerFiles(path.resolve("players/data"))
+    addPlayerFiles(path.resolve("playerdata"))
+
+    // Regions: 26.1+ stores dimensions under dimensions/<namespace>/<dim>/region;
+    // earlier versions use region/ (overworld), DIM-1/region (nether), DIM1/region (end).
+    val dimensionsRoot = path.resolve("dimensions")
+    if (Files.isDirectory(dimensionsRoot)) {
+        Files.list(dimensionsRoot).forEach { ns ->
+            if (!Files.isDirectory(ns)) return@forEach
+            Files.list(ns).forEach { dim ->
+                if (!Files.isDirectory(dim)) return@forEach
+                addRegionFiles(dim.resolve("region"))
             }
         }
+    } else {
+        addRegionFiles(path.resolve("region"))
+        addRegionFiles(path.resolve("DIM-1/region"))
+        addRegionFiles(path.resolve("DIM1/region"))
     }
+
     return haystack
 }
 
