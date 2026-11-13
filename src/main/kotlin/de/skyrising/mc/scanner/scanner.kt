@@ -142,6 +142,19 @@ fun getHaystack(path: Path): Set<Scannable> {
         }
     }
 
+    fun addEntityFiles(dir: Path) {
+        if (!Files.isDirectory(dir)) return
+        Files.list(dir).forEach {
+            if (it.fileName.toString().endsWith(".mca")) {
+                try {
+                    haystack.add(EntityRegionFile(it))
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+    }
+
     fun addPlayerFiles(dir: Path) {
         if (!Files.isDirectory(dir)) return
         Files.list(dir).forEach {
@@ -169,12 +182,16 @@ fun getHaystack(path: Path): Set<Scannable> {
             Files.list(ns).forEach { dim ->
                 if (!Files.isDirectory(dim)) return@forEach
                 addRegionFiles(dim.resolve("region"))
+                addEntityFiles(dim.resolve("entities"))
             }
         }
     } else {
         addRegionFiles(path.resolve("region"))
         addRegionFiles(path.resolve("DIM-1/region"))
         addRegionFiles(path.resolve("DIM1/region"))
+        addEntityFiles(path.resolve("entities"))
+        addEntityFiles(path.resolve("DIM-1/entities"))
+        addEntityFiles(path.resolve("DIM1/entities"))
     }
 
     return haystack

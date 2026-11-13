@@ -139,33 +139,22 @@ private fun scanFlattenedChunk(data: CompoundTag, version: Int, blockStateNeedle
 }
 
 private fun scanChunkItems(version: Int, data: CompoundTag, itemNeedles: Set<ItemType>, statsMode: Boolean, dimension: String, results: MutableList<SearchResult>) {
+    fun scanSources(sources: List<ItemSource>) {
+        for (source in sources) {
+            val contents = scanInventory(source.items, itemNeedles, statsMode, source.version)
+            addResults(results, source.location, contents, statsMode)
+        }
+    }
     val blockEntitiesTag = if (version >= DataVersion.REMOVE_LEVEL_TAG) "block_entities" else "TileEntities"
     if (data.has(blockEntitiesTag, Tag.LIST)) {
         for (blockEntity in data.getList<CompoundTag>(blockEntitiesTag)) {
-            if (!blockEntity.has("Items", Tag.LIST)) continue
-            val contents = scanInventory(blockEntity.getList("Items"), itemNeedles, statsMode, version)
-            val pos = BlockPos(dimension, blockEntity.getInt("x"), blockEntity.getInt("y"), blockEntity.getInt("z"))
-            val container = Container(blockEntity.getString("id"), pos)
-            addResults(results, container, contents, statsMode)
+            scanSources(blockEntitySources(blockEntity, version, dimension))
         }
     }
     val entitiesTag = if (version >= DataVersion.REMOVE_LEVEL_TAG) "entities" else "Entities"
     if (data.has(entitiesTag, Tag.LIST)) {
         for (entity in data.getList<CompoundTag>(entitiesTag)) {
-            val id = entity.getString("id")
-            val items = mutableListOf<CompoundTag>()
-            if (entity.has("HandItems", Tag.LIST)) items.addAll(entity.getList("HandItems"))
-            if (entity.has("ArmorItems", Tag.LIST)) items.addAll(entity.getList("ArmorItems"))
-            if (entity.has("Inventory", Tag.LIST)) items.addAll(entity.getList("Inventory"))
-            if (entity.has("Item", Tag.COMPOUND)) items.add(entity.getCompound("Item"))
-            val listTag = ListTag(items.filter(CompoundTag::isNotEmpty))
-            if (listTag.isNotEmpty()) {
-                val posTag = entity.getList<DoubleTag>("Pos")
-                val pos = Vec3d(dimension, posTag[0].value, posTag[1].value, posTag[2].value)
-                val entityLocation = Entity(id, pos)
-                val contents = scanInventory(listTag, itemNeedles, statsMode, version)
-                addResults(results, entityLocation, contents, statsMode)
-            }
+            scanSources(entitySources(entity, version, dimension))
         }
     }
 }

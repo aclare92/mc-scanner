@@ -8,7 +8,7 @@ import kotlin.concurrent.getOrSet
 
 private val decompressedBuf = ThreadLocal<ByteArray>()
 
-class RegionReader(private val channel: SeekableByteChannel): AutoCloseable {
+class RegionReader(private val channel: SeekableByteChannel, private val stripLevel: Boolean = true): AutoCloseable {
     private var fileSize: Long = 0
     private var chunkBuf: ByteBuffer? = null
 
@@ -106,10 +106,10 @@ class RegionReader(private val channel: SeekableByteChannel): AutoCloseable {
             return
         }
         val version = chunk.getInt("DataVersion");
-        if (!chunk.has("Level", Tag.COMPOUND) && version < DataVersion.REMOVE_LEVEL_TAG) {
+        if (stripLevel && !chunk.has("Level", Tag.COMPOUND) && version < DataVersion.REMOVE_LEVEL_TAG) {
             visitor.onInvalidData(IllegalArgumentException("No level tag"))
             return
         }
-        visitor.visit(version, if (version >= DataVersion.REMOVE_LEVEL_TAG) chunk else chunk.getCompound("Level"))
+        visitor.visit(version, if (stripLevel && version < DataVersion.REMOVE_LEVEL_TAG) chunk.getCompound("Level") else chunk)
     }
 }

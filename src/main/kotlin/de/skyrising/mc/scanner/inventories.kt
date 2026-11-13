@@ -21,19 +21,15 @@ data class PlayerFile(private val path: Path) : Scannable {
 
     override fun scan(needles: Collection<Needle>, statsMode: Boolean): List<SearchResult> {
         val itemNeedles = needles.filterIsInstance<ItemType>()
-        if (itemNeedles.isEmpty()) return emptyList()
+        if (itemNeedles.isEmpty() && !statsMode) return emptyList()
         val raw = Files.readAllBytes(path)
         val data = Tag.read(ByteBufferDataInput(DECOMPRESSOR.decodeGzip(ByteBuffer.wrap(raw))))
         if (data !is CompoundTag) return emptyList()
         val results = mutableListOf<SearchResult>()
         val chunkVer = if (data.has("DataVersion", Tag.INTEGER)) data.getInt("DataVersion") else 0
-        if (data.has("Inventory", Tag.LIST)) {
-            val invScan = scanInventory(data.getList("Inventory"), itemNeedles, statsMode, chunkVer)
-            addResults(results, PlayerInventory(uuid, false), invScan, statsMode)
-        }
-        if (data.has("EnderItems", Tag.LIST)) {
-            val enderScan = scanInventory(data.getList("EnderItems"), itemNeedles, statsMode, chunkVer)
-            addResults(results, PlayerInventory(uuid, true), enderScan, statsMode)
+        for (source in playerSources(data, chunkVer, uuid)) {
+            val contents = scanInventory(source.items, itemNeedles, statsMode, source.version)
+            addResults(results, source.location, contents, statsMode)
         }
         return results
     }
@@ -111,6 +107,16 @@ fun getSubResults(slot: CompoundTag, needles: Collection<ItemType>, statsMode: B
         }
         if (components.has("minecraft:bundle_contents", Tag.LIST)) {
             return scanInventory(components.getList("minecraft:bundle_contents"), needles, statsMode, chunkVer)
+        }
+        if (components.has("minecraft:charged_projectiles", Tag.LIST)) {
+            return scanInventory(components.getList("minecraft:charged_projectiles"), needles, statsMode, chunkVer)
+        }
+        if (components.has("minecraft:pot_decorations", Tag.COMPOUND)) {
+            val decorations = components.getCompound("minecraft:pot_decorations")
+            val items = listOf("left", "back", "right", "front").mapNotNull { face ->
+                if (decorations.has(face, Tag.COMPOUND)) decorations.getCompound(face) else null
+            }
+            if (items.isNotEmpty()) return scanInventory(ListTag(items), needles, statsMode, chunkVer)
         }
         return emptyList()
     }
