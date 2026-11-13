@@ -14,3 +14,6 @@ out/
 benchmark*.txt
 results.txt
 *.log
+
+# Test worlds (large, generated externally; never committed)
+test-data/
