@@ -60,13 +60,15 @@ data class RegionFile(private val path: Path) : Scannable {
     }
 }
 
-fun getPalette(section: CompoundTag, version: Int): List<CompoundTag>? {
-    if (version <= DataVersion.BLOCK_STATES_CONTAINERIZED) {
-        return if (section.has("Palette", Tag.LIST)) section.getList("Palette") else null
+fun getPalette(section: CompoundTag, version: Int): List<Tag>? {
+    val listTag: Tag? = when {
+        version <= DataVersion.BLOCK_STATES_CONTAINERIZED -> section["Palette"]
+        else -> {
+            if (!section.has("block_states", Tag.COMPOUND)) return null
+            section.getCompound("block_states")["palette"]
+        }
     }
-    if (!section.has("block_states", Tag.COMPOUND)) return null
-    val container = section.getCompound("block_states")
-    return if (container.has("palette", Tag.LIST)) container.getList("palette") else null
+    return (listTag as? ListTag<*>)?.map { it as Tag }
 }
 
 fun getBlockStates(section: CompoundTag, version: Int): LongArray? {
@@ -120,7 +122,7 @@ private fun scanFlattenedChunk(data: CompoundTag, version: Int, blockStateNeedle
         val blockStates = getBlockStates(section, version) ?: continue
         val matchingPaletteEntries = Int2ObjectOpenHashMap<BlockState>()
         palette.forEachIndexed { index, paletteEntry ->
-            val state = BlockState.from(paletteEntry)
+        val state = BlockState.from(paletteEntry, version)
             for (blockNeedle in blockStateNeedles) {
                 if (state.matches(blockNeedle)) matchingPaletteEntries[index] = blockNeedle
             }

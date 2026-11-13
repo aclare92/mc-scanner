@@ -97,11 +97,30 @@ data class BlockState(val id: Identifier, val properties: Map<String, String> = 
             return BlockState(id, properties)
         }
 
-        fun from(nbt: CompoundTag): BlockState {
-            val id = Identifier.of(nbt.getString("Name"))
-            if (!nbt.has("Properties", Tag.COMPOUND)) return BlockState(id)
+        fun from(tag: Tag, version: Int): BlockState = when (tag) {
+            is StringTag -> BlockState(Identifier.of(tag.value))
+            is CompoundTag -> from(tag, version)
+            else -> throw IllegalArgumentException("Unexpected block palette entry: $tag")
+        }
+
+        fun from(nbt: CompoundTag, version: Int): BlockState {
+            val id: Identifier
+            val props: CompoundTag?
+            if (version >= DataVersion.BLOCK_PALETTE_COMPACT) {
+                val idStr = when {
+                    nbt.has("id", Tag.STRING) -> nbt.getString("id")
+                    nbt.has("", Tag.STRING) -> nbt.getString("")
+                    else -> throw IllegalArgumentException("Block palette entry has no id: $nbt")
+                }
+                id = Identifier.of(idStr)
+                props = if (nbt.has("properties", Tag.COMPOUND)) nbt.getCompound("properties") else null
+            } else {
+                id = Identifier.of(nbt.getString("Name"))
+                props = if (nbt.has("Properties", Tag.COMPOUND)) nbt.getCompound("Properties") else null
+            }
+            if (props == null) return BlockState(id)
             val properties = LinkedHashMap<String, String>()
-            for (e in nbt.getCompound("Properties").entries) {
+            for (e in props.entries) {
                 properties[e.key] = (e.value as StringTag).value
             }
             return BlockState(id, properties)
