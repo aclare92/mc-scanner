@@ -1,3 +1,4 @@
+@file:OptIn(ExperimentalUnsignedTypes::class)
 package de.skyrising.mc.scanner.zlib
 
 const val ZLIB_METHOD_DEFLATE = 8u

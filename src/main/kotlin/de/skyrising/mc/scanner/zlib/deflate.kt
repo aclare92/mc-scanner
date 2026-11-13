@@ -212,7 +212,7 @@ fun inflate(stream: BitStream, arr: ByteArray): ByteBuffer {
                         if (c in ' '..'~') {
                             print(c)
                         } else {
-                            print("\\u%04x".format(c.toInt()))
+                            print("\\u%04x".format(c.code))
                         }
                     }
                     println("'")
