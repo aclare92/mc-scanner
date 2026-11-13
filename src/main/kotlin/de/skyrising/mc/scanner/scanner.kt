@@ -160,8 +160,21 @@ fun getHaystack(path: Path): Set<Scannable> {
 }
 
 fun builtinScript(name: String): Path {
-    val url = ScannerScript::class.java.getResource("/scripts/$name.scan.kts")
-    return Paths.get(url?.toURI() ?: throw IllegalArgumentException("Script not found: $name"))
+    val uri = ScannerScript::class.java
+        .getResource("/scripts/$name.scan.kts")
+        ?.toURI()
+        ?: throw IllegalArgumentException("Script not found: $name")
+
+    if (uri.scheme == "jar") {
+        // The zipfs provider can't resolve a jar: URI until its filesystem is created.
+        try {
+            FileSystems.newFileSystem(uri, emptyMap<String, Any>())
+        } catch (e: FileSystemAlreadyExistsException) {
+            // Already open (e.g. a previous built-in script lookup).
+        }
+    }
+
+    return Paths.get(uri)
 }
 
 fun evalScript(path: Path, scan: Scan): ResultWithDiagnostics<EvaluationResult> {
