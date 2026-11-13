@@ -131,4 +131,11 @@ class ItemSourceTest {
         val result = scanInventory(ListTag(listOf(pot)), listOf(needle("minecraft:heart_pottery_sherd")), false, ver)
         assertEquals(1L, result[0].getLong(needle("minecraft:heart_pottery_sherd")))
     }
+
+    @Test
+    fun missingCountDefaultsToOne() {
+        val slots = ListTag(listOf(CompoundTag(mutableMapOf("id" to StringTag("minecraft:stone")))))
+        assertEquals(1L, scanInventory(slots, listOf(needle("minecraft:stone")), false, ver)[0].getLong(needle("minecraft:stone")))
+        assertEquals(1L, scanInventory(slots, emptyList(), true, ver)[0].getLong(needle("minecraft:stone")))
+    }
 }

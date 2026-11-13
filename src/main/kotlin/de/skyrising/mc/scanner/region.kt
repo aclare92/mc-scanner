@@ -55,6 +55,14 @@ data class RegionFile(private val path: Path) : Scannable {
         return scanChunks(needles, statsMode)
     }
 
+    override fun itemSources(): List<ItemSource> {
+        val sources = mutableListOf<ItemSource>()
+        forEachChunk { _, _, version, data ->
+            sources += chunkItemSources(data, version, dimension)
+        }
+        return sources
+    }
+
     override fun toString(): String {
         return "RegionFile($dimension, x=$x, z=$z)"
     }
@@ -139,23 +147,9 @@ private fun scanFlattenedChunk(data: CompoundTag, version: Int, blockStateNeedle
 }
 
 private fun scanChunkItems(version: Int, data: CompoundTag, itemNeedles: Set<ItemType>, statsMode: Boolean, dimension: String, results: MutableList<SearchResult>) {
-    fun scanSources(sources: List<ItemSource>) {
-        for (source in sources) {
-            val contents = scanInventory(source.items, itemNeedles, statsMode, source.version)
-            addResults(results, source.location, contents, statsMode)
-        }
-    }
-    val blockEntitiesTag = if (version >= DataVersion.REMOVE_LEVEL_TAG) "block_entities" else "TileEntities"
-    if (data.has(blockEntitiesTag, Tag.LIST)) {
-        for (blockEntity in data.getList<CompoundTag>(blockEntitiesTag)) {
-            scanSources(blockEntitySources(blockEntity, version, dimension))
-        }
-    }
-    val entitiesTag = if (version >= DataVersion.REMOVE_LEVEL_TAG) "entities" else "Entities"
-    if (data.has(entitiesTag, Tag.LIST)) {
-        for (entity in data.getList<CompoundTag>(entitiesTag)) {
-            scanSources(entitySources(entity, version, dimension))
-        }
+    for (source in chunkItemSources(data, version, dimension)) {
+        val contents = scanInventory(source.items, itemNeedles, statsMode, source.version)
+        addResults(results, source.location, contents, statsMode)
     }
 }
 

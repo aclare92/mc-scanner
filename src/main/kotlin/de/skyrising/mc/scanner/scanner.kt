@@ -28,7 +28,7 @@ fun main(args: Array<String>) {
     val nonOptions = parser.nonOptions()
     val blockArg = parser.acceptsAll(listOf("b", "block"), "Add a block to search for").withRequiredArg()
     val itemArg = parser.acceptsAll(listOf("i", "item"), "Add an item to search for").withRequiredArg()
-    val statsArg = parser.accepts("stats", "Calculate statistics for storage tech")
+    val statsArg = parser.accepts("stats", "Calculate statistics for storage tech. Optionally select outputs: counts, inventories, stats, nbt").withOptionalArg()
     val geode = parser.accepts("geode", "Calculate AFK spots for geodes")
     val threadsArg = parser.acceptsAll(listOf("t", "threads"), "Set the number of threads to use").withRequiredArg().ofType(Integer::class.java)
     val loopArg = parser.accepts("loop").withOptionalArg().ofType(Integer::class.java)
@@ -48,6 +48,7 @@ fun main(args: Array<String>) {
     val outPath: Path
     val zip: FileSystem?
     val script: Path
+    val outputs: Set<String>
     try {
         val options = parser.parse(*args)
         if (options.has(helpArg)) {
@@ -74,6 +75,7 @@ fun main(args: Array<String>) {
             }
         }
         val paths = options.valuesOf(nonOptions).toMutableList()
+        outputs = options.valueOf(statsArg)?.split(',')?.map(String::trim)?.filter(String::isNotEmpty)?.toSet() ?: emptySet()
         script = when {
             options.has(statsArg) -> builtinScript("stats")
             options.has(geode) -> builtinScript("geode")
@@ -117,7 +119,7 @@ fun main(args: Array<String>) {
         else -> Executors.newWorkStealingPool(threads)
     }
     do {
-        runScript(path, outPath, executor, needles, script)
+        runScript(path, outPath, outputs, executor, needles, script)
     } while (loopCount == -1 || loopCount-- > 0)
     zip?.close()
     executor.shutdownNow()
@@ -222,8 +224,9 @@ fun evalScript(path: Path, scan: Scan): ResultWithDiagnostics<EvaluationResult> 
     })
 }
 
-fun runScript(path: Path, outPath: Path, executor: ExecutorService, needles: List<Needle>, script: Path) {
-    val scan = Scan(outPath, needles)
+fun runScript(path: Path, outPath: Path, outputs: Set<String>, executor: ExecutorService, needles: List<Needle>, script: Path) {
+    LOOT_CONTAINERS.set(0)
+    val scan = Scan(outPath, needles, outputs)
     evalScript(script, scan).valueOrThrow()
     val haystack = getHaystack(path).filterTo(mutableSetOf(), scan.haystackPredicate)
     var totalSize = 0L
@@ -268,11 +271,16 @@ fun runScript(path: Path, outPath: Path, executor: ExecutorService, needles: Lis
     printStatus(haystack.size)
     println()
 
+    val lootCount = LOOT_CONTAINERS.get()
+    if (lootCount > 0) {
+        System.err.println("Warning: $lootCount container(s) with unresolved loot tables were skipped (contents not counted).")
+    }
 }
 
 interface Scannable {
     val size: Long
     fun scan(needles: Collection<Needle>, statsMode: Boolean): List<SearchResult>
+    fun itemSources(): List<ItemSource>
 }
 interface Location
 

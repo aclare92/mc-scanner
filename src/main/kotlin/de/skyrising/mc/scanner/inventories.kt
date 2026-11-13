@@ -19,15 +19,19 @@ data class PlayerFile(private val path: Path) : Scannable {
         uuid = UUID.fromString(nameParts[0])
     }
 
-    override fun scan(needles: Collection<Needle>, statsMode: Boolean): List<SearchResult> {
-        val itemNeedles = needles.filterIsInstance<ItemType>()
-        if (itemNeedles.isEmpty() && !statsMode) return emptyList()
+    override fun itemSources(): List<ItemSource> {
         val raw = Files.readAllBytes(path)
         val data = Tag.read(ByteBufferDataInput(DECOMPRESSOR.decodeGzip(ByteBuffer.wrap(raw))))
         if (data !is CompoundTag) return emptyList()
-        val results = mutableListOf<SearchResult>()
         val chunkVer = if (data.has("DataVersion", Tag.INTEGER)) data.getInt("DataVersion") else 0
-        for (source in playerSources(data, chunkVer, uuid)) {
+        return playerSources(data, chunkVer, uuid)
+    }
+
+    override fun scan(needles: Collection<Needle>, statsMode: Boolean): List<SearchResult> {
+        val itemNeedles = needles.filterIsInstance<ItemType>()
+        if (itemNeedles.isEmpty() && !statsMode) return emptyList()
+        val results = mutableListOf<SearchResult>()
+        for (source in itemSources()) {
             val contents = scanInventory(source.items, itemNeedles, statsMode, source.version)
             addResults(results, source.location, contents, statsMode)
         }
@@ -65,8 +69,7 @@ fun scanInventory(slots: ListTag<CompoundTag>, needles: Collection<ItemType>, st
                 }
             }
             if (bestMatch != null) {
-                val countKey = if (chunkVer >= DataVersion.COMPONENTS_REWORK) "count" else "Count"
-                result.addTo(bestMatch, slot.getInt(countKey).toLong())
+                result.addTo(bestMatch, itemCount(slot, chunkVer))
             }
         }
         if (contained.isEmpty()) continue
@@ -96,36 +99,8 @@ fun flatten(items: Object2LongMap<ItemType>) {
 }
 
 fun getSubResults(slot: CompoundTag, needles: Collection<ItemType>, statsMode: Boolean, chunkVer: Int): List<Object2LongMap<ItemType>> {
-    if (chunkVer >= DataVersion.COMPONENTS_REWORK) {
-        if (!slot.has("components", Tag.COMPOUND)) return emptyList()
-        val components = slot.getCompound("components")
-        if (components.has("minecraft:container", Tag.LIST)) {
-            val items = components.getList<CompoundTag>("minecraft:container")
-                .map { it.getCompound("item") }
-                .toMutableList()
-            return scanInventory(ListTag(items), needles, statsMode, chunkVer)
-        }
-        if (components.has("minecraft:bundle_contents", Tag.LIST)) {
-            return scanInventory(components.getList("minecraft:bundle_contents"), needles, statsMode, chunkVer)
-        }
-        if (components.has("minecraft:charged_projectiles", Tag.LIST)) {
-            return scanInventory(components.getList("minecraft:charged_projectiles"), needles, statsMode, chunkVer)
-        }
-        if (components.has("minecraft:pot_decorations", Tag.COMPOUND)) {
-            val decorations = components.getCompound("minecraft:pot_decorations")
-            val items = listOf("left", "back", "right", "front").mapNotNull { face ->
-                if (decorations.has(face, Tag.COMPOUND)) decorations.getCompound(face) else null
-            }
-            if (items.isNotEmpty()) return scanInventory(ListTag(items), needles, statsMode, chunkVer)
-        }
-        return emptyList()
-    }
-    if (!slot.has("tag", Tag.COMPOUND)) return emptyList()
-    val tag = slot.getCompound("tag")
-    if (!tag.has("BlockEntityTag", Tag.COMPOUND)) return emptyList()
-    val blockEntityTag = tag.getCompound("BlockEntityTag")
-    if (!blockEntityTag.has("Items", Tag.LIST)) return emptyList()
-    return scanInventory(blockEntityTag.getList("Items"), needles, statsMode, chunkVer)
+    val nested = nestedItemLists(slot, chunkVer).firstOrNull() ?: return emptyList()
+    return scanInventory(nested, needles, statsMode, chunkVer)
 }
 
 fun tallyStats(scan: Object2LongMap<ItemType>): StatsResults {

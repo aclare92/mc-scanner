@@ -29,12 +29,18 @@ application {
     mainClass.set("de.skyrising.mc.scanner.ScannerKt")
 }
 
+// The fat jar is the distributable artifact; the thin jar would clobber it.
+tasks.jar {
+    enabled = false
+}
+
 tasks {
     named<ShadowJar>("shadowJar") {
         archiveClassifier.set("")
         mergeServiceFiles()
         minimize {
             exclude(dependency("org.jetbrains.kotlin:.*"))
+            exclude(dependency("it.unimi.dsi:fastutil"))
         }
         dependsOn(distTar, distZip)
     }

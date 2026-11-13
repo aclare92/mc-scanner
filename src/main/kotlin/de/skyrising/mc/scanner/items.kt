@@ -3,10 +3,12 @@ package de.skyrising.mc.scanner
 import de.skyrising.mc.scanner.region.ChunkVisitor
 import de.skyrising.mc.scanner.region.RegionReader
 import de.skyrising.mc.scanner.region.RegionVisitor
+import java.io.StringWriter
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * A location that holds a list of item stacks, discovered by the version-aware
@@ -24,6 +26,9 @@ fun blockEntitySources(be: CompoundTag, version: Int, dimension: String): List<I
     val pos = BlockPos(dimension, be.getInt("x"), be.getInt("y"), be.getInt("z"))
     val location = Container(be.getString("id"), pos)
     val sources = mutableListOf<ItemSource>()
+
+    // Unresolved loot table (contents generated on first open, not from NBT)
+    if (be.has("LootTable", Tag.STRING)) LOOT_CONTAINERS.incrementAndGet()
 
     // Generic container list (chest, barrel, hopper, furnace, dispenser, dropper, chiseled bookshelf, ...)
     if (be.has("Items", Tag.LIST)) {
@@ -110,10 +115,8 @@ data class EntityRegionFile(private val path: Path) : Scannable {
 
     fun reader() = RegionReader(Files.newByteChannel(path, StandardOpenOption.READ), stripLevel = false)
 
-    override fun scan(needles: Collection<Needle>, statsMode: Boolean): List<SearchResult> {
-        val itemNeedles = needles.filterIsInstance<ItemType>()
-        if (itemNeedles.isEmpty() && !statsMode) return emptyList()
-        val results = mutableListOf<SearchResult>()
+    override fun itemSources(): List<ItemSource> {
+        val sources = mutableListOf<ItemSource>()
         reader().use { r ->
             r.accept(object : RegionVisitor() {
                 override fun visitChunk(x: Int, z: Int): ChunkVisitor {
@@ -121,10 +124,7 @@ data class EntityRegionFile(private val path: Path) : Scannable {
                         override fun visit(version: Int, data: CompoundTag) {
                             if (!data.has("Entities", Tag.LIST)) return
                             for (entity in data.getList<CompoundTag>("Entities")) {
-                                for (source in entitySources(entity, version, dimension)) {
-                                    val contents = scanInventory(source.items, itemNeedles, statsMode, source.version)
-                                    addResults(results, source.location, contents, statsMode)
-                                }
+                                sources += entitySources(entity, version, dimension)
                             }
                         }
 
@@ -135,8 +135,103 @@ data class EntityRegionFile(private val path: Path) : Scannable {
                 }
             })
         }
+        return sources
+    }
+
+    override fun scan(needles: Collection<Needle>, statsMode: Boolean): List<SearchResult> {
+        val itemNeedles = needles.filterIsInstance<ItemType>()
+        if (itemNeedles.isEmpty() && !statsMode) return emptyList()
+        val results = mutableListOf<SearchResult>()
+        for (source in itemSources()) {
+            val contents = scanInventory(source.items, itemNeedles, statsMode, source.version)
+            addResults(results, source.location, contents, statsMode)
+        }
         return results
     }
 
     override fun toString() = "EntityRegionFile($dimension, x=$x, z=$z)"
+}
+
+/** Thread-safe count of containers whose contents come from an unresolved loot table. */
+val LOOT_CONTAINERS = AtomicInteger()
+
+/** The nested item-stack lists held inside an item stack (shulker boxes, bundles, crossbows, pots). */
+fun nestedItemLists(slot: CompoundTag, version: Int): List<ListTag<CompoundTag>> {
+    val lists = mutableListOf<ListTag<CompoundTag>>()
+    if (version >= DataVersion.COMPONENTS_REWORK) {
+        if (!slot.has("components", Tag.COMPOUND)) return emptyList()
+        val components = slot.getCompound("components")
+        if (components.has("minecraft:container_loot", Tag.COMPOUND)) LOOT_CONTAINERS.incrementAndGet()
+        if (components.has("minecraft:container", Tag.LIST)) {
+            val items = components.getList<CompoundTag>("minecraft:container").map { it.getCompound("item") }.toMutableList()
+            lists.add(ListTag(items))
+        }
+        if (components.has("minecraft:bundle_contents", Tag.LIST)) {
+            lists.add(components.getList<CompoundTag>("minecraft:bundle_contents"))
+        }
+        if (components.has("minecraft:charged_projectiles", Tag.LIST)) {
+            lists.add(components.getList<CompoundTag>("minecraft:charged_projectiles"))
+        }
+        if (components.has("minecraft:pot_decorations", Tag.COMPOUND)) {
+            val decorations = components.getCompound("minecraft:pot_decorations")
+            val items = listOf("left", "back", "right", "front").mapNotNull { face ->
+                if (decorations.has(face, Tag.COMPOUND)) decorations.getCompound(face) else null
+            }
+            if (items.isNotEmpty()) lists.add(ListTag(items))
+        }
+    } else {
+        if (slot.has("tag", Tag.COMPOUND)) {
+            val tag = slot.getCompound("tag")
+            if (tag.has("BlockEntityTag", Tag.COMPOUND)) {
+                val bet = tag.getCompound("BlockEntityTag")
+                if (bet.has("Items", Tag.LIST)) lists.add(bet.getList<CompoundTag>("Items"))
+            }
+        }
+    }
+    return lists
+}
+
+/** Item sources held inside a chunk compound (block entities and entities). */
+fun chunkItemSources(data: CompoundTag, version: Int, dimension: String): List<ItemSource> {
+    val sources = mutableListOf<ItemSource>()
+    val blockEntitiesTag = if (version >= DataVersion.REMOVE_LEVEL_TAG) "block_entities" else "TileEntities"
+    if (data.has(blockEntitiesTag, Tag.LIST)) {
+        for (be in data.getList<CompoundTag>(blockEntitiesTag)) sources += blockEntitySources(be, version, dimension)
+    }
+    val entitiesTag = if (version >= DataVersion.REMOVE_LEVEL_TAG) "entities" else "Entities"
+    if (data.has(entitiesTag, Tag.LIST)) {
+        for (e in data.getList<CompoundTag>(entitiesTag)) sources += entitySources(e, version, dimension)
+    }
+    return sources
+}
+
+/** The number of items in a stack, defaulting to 1 when the count tag is omitted. */
+fun itemCount(slot: CompoundTag, version: Int): Long {
+    val countKey = if (version >= DataVersion.COMPONENTS_REWORK) "count" else "Count"
+    return if (slot.has(countKey, Tag.INTEGER)) slot.getInt(countKey).toLong() else 1L
+}
+
+/** A single item stack, with its distinguishing NBT, for the granular breakdown. */
+data class ItemStackEntry(val id: String, val count: Long, val nbt: String)
+
+/** The item's NBT minus id/count/slot, so distinct variants collapse to distinct rows. */
+fun itemStackNbt(slot: CompoundTag): String {
+    val filtered = slot.value.filterKeys { it != "id" && it != "count" && it != "Count" && it != "Slot" && it != "slot" }
+    val sw = StringWriter()
+    CompoundTag(filtered.toMutableMap()).writeSnbt(sw)
+    return sw.toString()
+}
+
+/** Recursively walks item stacks (including nested containers) and emits granular entries. */
+fun dumpItemStacks(items: ListTag<CompoundTag>, version: Int): List<ItemStackEntry> {
+    val out = mutableListOf<ItemStackEntry>()
+    fun walk(list: ListTag<CompoundTag>) {
+        for (slot in list) {
+            if (!slot.has("id", Tag.STRING)) continue
+            out += ItemStackEntry(slot.getString("id"), itemCount(slot, version), itemStackNbt(slot))
+            for (nested in nestedItemLists(slot, version)) walk(nested)
+        }
+    }
+    walk(items)
+    return out
 }
