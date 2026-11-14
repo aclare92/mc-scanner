@@ -17,3 +17,7 @@ results.txt
 
 # Test worlds (large, generated externally; never committed)
 test-data/
+
+# Local world data and export output (large; never committed)
+input-data/
+output-data/
