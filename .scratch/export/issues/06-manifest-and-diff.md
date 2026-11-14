@@ -1,7 +1,7 @@
 # 06 — Manifest and losslessness diff
 
 **Type:** task
-**Status:** ready-for-agent
+**Status:** resolved
 **Blocked by:** 03
 
 ## Goal
@@ -26,4 +26,5 @@ Emit the granular manifest, the diffable totals, and a losslessness check so the
 
 ## Comments
 
-_None yet._
+- **Implemented.** `manifest.kt`: `manifestRows`, `exportTotals` (complete, recurses containers), `reportEquivalentTotals` (mirrors the report's counting), `diffTotals`, `writeManifest`, `writeTotals`, `readCountsCsv`. `totals.csv` is keyed like the report (`id` plus `.damage` for non-zero damage). `ManifestTest` covers manifest rows, recursion, damage keying, and diff.
+- **Reconciliation vs report:** the diff compares `counts.csv` against `reportEquivalentTotals`, because the report **does not count an item that holds contents** (it counts the contents instead). See ticket `09`. With that, the real 26.3 world reconciles: "losslessness check passed".

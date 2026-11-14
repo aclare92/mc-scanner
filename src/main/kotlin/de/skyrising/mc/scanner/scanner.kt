@@ -30,6 +30,7 @@ fun main(args: Array<String>) {
     val itemArg = parser.acceptsAll(listOf("i", "item"), "Add an item to search for").withRequiredArg()
     val statsArg = parser.accepts("stats", "Calculate statistics for storage tech. Optionally select outputs: counts, inventories, stats, nbt").withOptionalArg()
     val geode = parser.accepts("geode", "Calculate AFK spots for geodes")
+    val export = parser.accepts("export", "Export items to a Litematica and vanilla-structure schematic")
     val threadsArg = parser.acceptsAll(listOf("t", "threads"), "Set the number of threads to use").withRequiredArg().ofType(Integer::class.java)
     val loopArg = parser.accepts("loop").withOptionalArg().ofType(Integer::class.java)
     val decompressorArg = parser.accepts("decompressor", "Decompressor to use").withOptionalArg().withValuesConvertedBy(object : ValueConverter<Decompressor> {
@@ -79,6 +80,7 @@ fun main(args: Array<String>) {
         script = when {
             options.has(statsArg) -> builtinScript("stats")
             options.has(geode) -> builtinScript("geode")
+            options.has(export) -> builtinScript("export")
             paths.isNotEmpty() && paths[0].endsWith(".scan.kts") -> Paths.get(paths.removeAt(0))
             else -> builtinScript("search")
         }

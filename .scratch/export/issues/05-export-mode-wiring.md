@@ -1,7 +1,7 @@
 # 05 — Export mode wiring (`--export` + `export.scan.kts`)
 
 **Type:** task
-**Status:** ready-for-agent
+**Status:** resolved
 **Blocked by:** 01, 06
 
 ## Goal
@@ -28,4 +28,5 @@ Add the `--export` built-in mode and its script, orchestrating `01` (writer), `0
 
 ## Comments
 
-_None yet._
+- **Implemented.** `--export` flag added in `scanner.kt` (dispatches to `builtinScript("export")`) and `src/main/resources/scripts/export.scan.kts`. Aggregates raw stacks per source, tracks data versions, refuses pre-1.20.5 sources, aborts on per-file scan failures (non-zero exit), packs, writes `export.litematic`/`export.nbt`/`manifest.csv`/`totals.csv`, and prints a summary + optional diff.
+- **Validated end-to-end** on `test-data/worlds/26.3/`: 1224 items → 3 shulker boxes → 1 barrel; diff against a `--stats=counts` run reconciles (see `06`).

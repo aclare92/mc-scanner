@@ -1,7 +1,7 @@
 # 02 — Max stack size table
 
 **Type:** task
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Goal
 
@@ -30,4 +30,5 @@ Follow the repo's existing pattern. Prefer a **static resource** JSON (like `src
 
 ## Comments
 
-_None yet._
+- **Implemented.** Vendored `src/main/resources/max_stack_size.json` (293 non-64 items) generated from `PrismarineJS/minecraft-data` for **1.21.11** (the owner's source version). Lookup in `maxstacksize.kt`; `MaxStackSizeTest` covers defaults and the surprising boundaries. `./gradlew test` passes.
+- Note: 1.21.11 has 49 × 16-stack and 244 × 1-stack items (26.3 adds a few, e.g. cushions/poplar signs, but those cannot appear in a 1.21.11 source world). Regenerate the JSON if the source version changes; unknown ids fall back to 64.

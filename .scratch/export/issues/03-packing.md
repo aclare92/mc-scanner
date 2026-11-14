@@ -1,7 +1,7 @@
 # 03 — Packing (items → shulker boxes → barrels)
 
 **Type:** task
-**Status:** ready-for-agent
+**Status:** resolved
 **Blocked by:** 02, 04
 
 ## Goal
@@ -32,4 +32,5 @@ Turn the retained item stacks (`04`) into a barrel fill: barrels placed on a fla
 
 ## Comments
 
-_None yet._
+- **Implemented.** `packIntoBarrels(items, version, rowLength)` in `packing.kt` returns `PackingResult(barrels, totalShulkerBoxes, totalItems)`. Groups identical (id, NBT) stacks, sorts by id then NBT, greedily chunks by `maxStackSize`, fills 27-slot shulker boxes and 27-box barrels, and lays them on the flat grid (`x=(i%rowLength)*2, z=(i/rowLength)*2`). Shulker boxes pass straight through to barrels (never nested). `PackingTest` covers 64+36 split, tool max-stack, shulker passthrough, barrel spill at 27, NBT-variant separation, and losslessness. `./gradlew test` passes.
+- Generated export boxes are `minecraft:shulker_box`; colour-coding remains out of scope.

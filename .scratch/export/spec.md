@@ -106,6 +106,7 @@ Items are copied **verbatim** from the source world, and the schematic's `Minecr
 - `06-manifest-and-diff` — `manifest.csv` + `totals.csv` + losslessness diff.
 - `07-data-fixer-verification` — confirm the data-fixer upgrades schematic item NBT on load (owner-action).
 - `08-pot-decorations-report-gap` — fix stats-mode recursion for pre-26.3 `pot_decorations` list form.
+- `09-report-container-item-omission` — decide whether the report should count container items that have contents (currently omitted).
 
 ## References
 
