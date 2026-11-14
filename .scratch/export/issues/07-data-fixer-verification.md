@@ -1,7 +1,7 @@
 # 07 — Data-fixer verification (owner-action)
 
 **Type:** research
-**Status:** ready-for-human
+**Status:** resolved
 **Blocked by:** 01
 
 ## Goal
@@ -29,3 +29,4 @@ Confirm the spec's Q9 approach: that schematic item NBT stamped at the source da
   `java -jar build/libs/mc-scanner-0.7.0.jar --export input-data/antcraft_vanilla output-data/antcraft_vanilla`
 - What to confirm: items appear in the barrels' shulker boxes with NBT intact (enchanted books/armour/weapons, custom names, a decorated pot whose sherds came from the pre-26.3 list form), and the pot's `pot_decorations` upgraded rather than erroring.
 - If only the **structure block** path works and Litematica does not (or vice versa), note which one on this ticket: the fallback is to stamp at 5023 with an explicit component mapping.
+- **Owner confirmed** that pasting the real 1.21.11 export into a 26.3 client worked correctly via **both** Litematica (`.litematic`) and a structure block (`.nbt`). The 4671 → 5023 data-fixer upgrades the item NBT on load, so the verbatim + source-`DataVersion` approach stands and no item-translation code is needed.

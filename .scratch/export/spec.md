@@ -80,7 +80,7 @@ Scan behaviour lives in runtime-evaluated `.scan.kts` scripts (see `AGENTS.md`);
 
 ### DataVersion handling
 
-Items are copied **verbatim** from the source world, and the schematic's `MinecraftDataVersion`/`DataVersion` is set to the **source world's data version** (4671). On load, the 26.3 game's data-fixer upgrades 4671 → 5023 — the same mechanism used to open an old world. The only drift between 4671 and 5023 that touches existing item components is `minecraft:pot_decorations` (list → object); the fixer handles it. **Open verification** (ticket `07`): confirm both the Litematica importer and the vanilla structure loader apply the data-fixer to item NBT. Fallback if they do not: write at 5023 with a minimal, explicit component mapping.
+Items are copied **verbatim** from the source world, and the schematic's `MinecraftDataVersion`/`DataVersion` is set to the **source world's data version** (4671). On load, the 26.3 game's data-fixer upgrades 4671 → 5023 — the same mechanism used to open an old world. The only drift between 4671 and 5023 that touches existing item components is `minecraft:pot_decorations` (list → object); the fixer handles it. **Verified** (ticket `07`): the owner pasted the real 1.21.11 export into a 26.3 client through both the Litematica importer and a vanilla structure block; items loaded correctly, so no item-translation code is needed.
 
 ## Packing rules
 
@@ -104,7 +104,7 @@ Items are copied **verbatim** from the source world, and the schematic's `Minecr
 - `04-structured-item-retention` — retain full item `CompoundTag`s during the export scan.
 - `05-export-mode-wiring` — `--export` flag + `export.scan.kts`, orchestrating the above.
 - `06-manifest-and-diff` — `manifest.csv` + `totals.csv` + losslessness diff.
-- `07-data-fixer-verification` — confirm the data-fixer upgrades schematic item NBT on load (owner-action).
+- `07-data-fixer-verification` — **resolved**: the data-fixer upgrades schematic item NBT on load in both Litematica and a structure block (owner-verified).
 - `08-pot-decorations-report-gap` — fix stats-mode recursion for pre-26.3 `pot_decorations` list form.
 - `09-report-container-item-omission` — **resolved**: the report now counts a container item in addition to its contents.
 
