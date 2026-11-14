@@ -21,4 +21,11 @@ Confirm the spec's Q9 approach: that schematic item NBT stamped at the source da
 
 ## Comments
 
-_None yet._
+- Owner will run the in-game paste test. Ready-made artifacts from the real source world:
+  - `output-data/antcraft_vanilla/export.litematic` (~415 KB) — Litematica, stamped `MinecraftDataVersion: 4671`.
+  - `output-data/antcraft_vanilla/export.nbt` (~419 KB) — vanilla structure, stamped `DataVersion: 4671`.
+  - `output-data/antcraft_vanilla/manifest.csv` — maps barrel/slot → item, for spot-checking exact stacks.
+- To regenerate (or make a smaller 1-2 barrel sample), run:
+  `java -jar build/libs/mc-scanner-0.7.0.jar --export input-data/antcraft_vanilla output-data/antcraft_vanilla`
+- What to confirm: items appear in the barrels' shulker boxes with NBT intact (enchanted books/armour/weapons, custom names, a decorated pot whose sherds came from the pre-26.3 list form), and the pot's `pot_decorations` upgraded rather than erroring.
+- If only the **structure block** path works and Litematica does not (or vice versa), note which one on this ticket: the fallback is to stamp at 5023 with an explicit component mapping.
