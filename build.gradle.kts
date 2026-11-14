@@ -51,7 +51,17 @@ tasks.test {
 }
 
 kotlin {
-    jvmToolchain(21)
+    // Compile with the installed JDK (25), but still emit JVM-21 bytecode so the
+    // fat jar keeps running on JDK 21+.
+    jvmToolchain(25)
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
+    }
+}
+
+// Keep the (mostly empty) Java compile tasks aligned with Kotlin's JVM target.
+tasks.withType<JavaCompile>().configureEach {
+    options.release.set(21)
 }
 
 val generatedKotlinDir = layout.buildDirectory.dir("generated/kotlin")
