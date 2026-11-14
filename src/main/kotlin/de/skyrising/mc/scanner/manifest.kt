@@ -48,7 +48,8 @@ fun manifestRows(barrels: List<PlacedBarrel>, version: Int): List<ManifestRow> {
 /**
  * Totals for the source items, recursing through nested containers. Keyed the way
  * the report keys `ItemType` (id plus non-zero damage), computed from the input
- * stacks so generated packaging is not counted.
+ * stacks so generated packaging is not counted. Container items are counted in
+ * addition to their contents, matching the report.
  */
 fun exportTotals(items: List<CompoundTag>, version: Int): Map<String, Long> {
     val totals = LinkedHashMap<String, Long>()
@@ -57,27 +58,6 @@ fun exportTotals(items: List<CompoundTag>, version: Int): Map<String, Long> {
         val key = itemKey(tag, version)
         totals[key] = (totals[key] ?: 0L) + itemCount(tag, version)
         for (nested in nestedItemLists(tag, version)) for (slot in nested) walk(slot)
-    }
-    for (item in items) walk(item)
-    return totals
-}
-
-/**
- * Mirrors the report's counting rule: an item that holds contents is not counted
- * itself, only its contents. Used only for the reconciliation diff, because the
- * report omits container items (shulker boxes, bundles, charged crossbows) that
- * have contents.
- */
-fun reportEquivalentTotals(items: List<CompoundTag>, version: Int): Map<String, Long> {
-    val totals = LinkedHashMap<String, Long>()
-    fun walk(tag: CompoundTag) {
-        if (!tag.has("id", Tag.STRING)) return
-        val nested = nestedItemLists(tag, version)
-        if (nested.isEmpty()) {
-            val key = itemKey(tag, version)
-            totals[key] = (totals[key] ?: 0L) + itemCount(tag, version)
-        }
-        for (list in nested) for (slot in list) walk(slot)
     }
     for (item in items) walk(item)
     return totals

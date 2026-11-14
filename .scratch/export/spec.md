@@ -93,7 +93,7 @@ Items are copied **verbatim** from the source world, and the schematic's `Minecr
 ## Manifest & verification
 
 - `manifest.csv` maps each occupied slot to its item, so any single item can be located.
-- `totals.csv` sums every item **recursing through `minecraft:container`**, so it is directly comparable to the report's `counts.csv`.
+- `totals.csv` sums every item **recursing through containers**, so it is directly comparable to the report's `counts.csv`. The report counts container items as well as their contents.
 - The report and export agree when their totals match. Note: the report currently under-counts sherds inside decorated-pot items on pre-26.3 worlds (see ticket `08`); the diff will surface that as a report-side gap, not an export loss.
 
 ## Tickets
@@ -106,7 +106,7 @@ Items are copied **verbatim** from the source world, and the schematic's `Minecr
 - `06-manifest-and-diff` — `manifest.csv` + `totals.csv` + losslessness diff.
 - `07-data-fixer-verification` — confirm the data-fixer upgrades schematic item NBT on load (owner-action).
 - `08-pot-decorations-report-gap` — fix stats-mode recursion for pre-26.3 `pot_decorations` list form.
-- `09-report-container-item-omission` — decide whether the report should count container items that have contents (currently omitted).
+- `09-report-container-item-omission` — **resolved**: the report now counts a container item in addition to its contents.
 
 ## References
 

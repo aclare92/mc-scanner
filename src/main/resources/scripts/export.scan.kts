@@ -56,10 +56,7 @@ after {
 
     val countsFile = outPath.resolve("counts.csv")
     if (Files.exists(countsFile)) {
-        // Compare against a report-equivalent total: the report does not count an item
-        // that holds contents (it counts the contents instead), so a "complete" total
-        // would always differ for filled containers.
-        val diff = diffTotals(readCountsCsv(countsFile), reportEquivalentTotals(items, dataVersion))
+        val diff = diffTotals(readCountsCsv(countsFile), totals)
         if (diff.isEmpty) {
             println("Export: losslessness check passed (totals reconcile with counts.csv).")
         } else {

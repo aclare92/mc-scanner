@@ -33,11 +33,11 @@ A dropped item on the ground. Since 1.17 these are stored in the `entities/` reg
 ### Output
 
 **report**:
-A count of items by type — item → total count, with no per-location detail and no NBT. The current deliverable.
+A count of items by type — item → total count, with no per-location detail and no NBT. The current deliverable. Container items (shulker boxes, bundles, charged crossbows) are counted in addition to their contents; an item holding contents is not packaging.
 _Avoid_: dump, summary
 
 **export**:
-Materialising scanned items back into a schematic: pack them into shulker boxes inside barrels, then write a Litematica `.litematic` and a vanilla structure `.nbt`. Specified in `.scratch/export/spec.md`; not yet implemented.
+Materialising scanned items back into a schematic: pack them into shulker boxes inside barrels, then write a Litematica `.litematic` and a vanilla structure `.nbt`. Specified in `.scratch/export/spec.md`; run with `--export`.
 
 **schematic**:
 A file that places blocks and block entities into a world — either a Litematica `.litematic` (bit-packed block states) or a vanilla structure block `.nbt` (explicit block list). Export writes both.

@@ -33,19 +33,11 @@ class ManifestTest {
     }
 
     @Test
-    fun totalsRecurseIntoContainers() {
+    fun totalsCountContainerAndContents() {
         val filled = item("minecraft:shulker_box", 1, container(item("minecraft:stone", 64)))
         val totals = exportTotals(listOf(filled), ver)
         assertEquals(1L, totals["minecraft:shulker_box"])
         assertEquals(64L, totals["minecraft:stone"])
-    }
-
-    @Test
-    fun reportEquivalentOmitsContainerWithContents() {
-        val filled = item("minecraft:shulker_box", 1, container(item("minecraft:stone", 64)))
-        val totals = reportEquivalentTotals(listOf(filled), ver)
-        assertEquals(64L, totals["minecraft:stone"])
-        assertTrue(!totals.containsKey("minecraft:shulker_box"))
     }
 
     @Test

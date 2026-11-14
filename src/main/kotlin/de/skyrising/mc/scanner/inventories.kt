@@ -51,7 +51,9 @@ fun scanInventory(slots: ListTag<CompoundTag>, needles: Collection<ItemType>, st
         val id = Identifier.of(slot.getString("id"))
         val contained = getSubResults(slot, needles, statsMode, chunkVer)
         val matchingTypes = byId[id]
-        if (matchingTypes != null || (byId.isEmpty() && statsMode && contained.isEmpty())) {
+        // A container item is an item in its own right: a filled shulker box, bundle
+        // or charged crossbow is counted in addition to its contents.
+        if (matchingTypes != null || (byId.isEmpty() && statsMode)) {
             val dmg = when {
                 chunkVer >= DataVersion.COMPONENTS_REWORK && slot.has("components", Tag.COMPOUND) -> {
                     val components = slot.getCompound("components")

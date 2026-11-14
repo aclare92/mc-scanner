@@ -70,6 +70,54 @@ class InventoryTest {
     }
 
     @Test
+    fun statsModeCountsContainerAndContents() {
+        val container = ListTag(
+            listOf(
+                CompoundTag(
+                    mutableMapOf(
+                        "slot" to IntTag(0),
+                        "item" to slot("minecraft:diamond", "count", 2),
+                    )
+                )
+            )
+        )
+        val shulker = CompoundTag(
+            mutableMapOf(
+                "id" to StringTag("minecraft:shulker_box"),
+                "count" to IntTag(1),
+                "components" to CompoundTag(mutableMapOf("minecraft:container" to container)),
+            )
+        )
+        val result = scanInventory(
+            ListTag(listOf(shulker)), emptyList(), true, DataVersion.COMPONENTS_REWORK,
+        )[0]
+        assertEquals(1L, result.getLong(needle("minecraft:shulker_box")))
+        assertEquals(2L, result.getLong(needle("minecraft:diamond")))
+    }
+
+    @Test
+    fun statsModeCountsChargedCrossbowAndProjectiles() {
+        val crossbow = CompoundTag(
+            mutableMapOf(
+                "id" to StringTag("minecraft:crossbow"),
+                "count" to IntTag(1),
+                "components" to CompoundTag(
+                    mutableMapOf(
+                        "minecraft:charged_projectiles" to ListTag(
+                            listOf(slot("minecraft:arrow", "count", 3))
+                        )
+                    )
+                ),
+            )
+        )
+        val result = scanInventory(
+            ListTag(listOf(crossbow)), emptyList(), true, DataVersion.COMPONENTS_REWORK,
+        )[0]
+        assertEquals(1L, result.getLong(needle("minecraft:crossbow")))
+        assertEquals(3L, result.getLong(needle("minecraft:arrow")))
+    }
+
+    @Test
     fun postReworkBundleContentsAreScanned() {
         val bundle = CompoundTag(
             mutableMapOf(
