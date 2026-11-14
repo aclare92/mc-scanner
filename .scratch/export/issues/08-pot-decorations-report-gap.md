@@ -1,7 +1,7 @@
 # 08 — Pre-26.3 `pot_decorations` report gap
 
 **Type:** task
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Goal
 
@@ -28,4 +28,4 @@ Fix the report (`stats`) under-counting of sherds inside decorated-pot items on 
 
 ## Comments
 
-_None yet._
+- **Implemented.** `nestedItemLists` now handles the pre-26.3 list form: it reads the `ListTag` of item-id strings, skips `minecraft:air` and default `minecraft:brick` faces, and emits them as `{id, count:1}` stacks, so the sherds are counted. The 26.3 object form is unchanged. No `DataVersion` constant was needed because the two forms are distinguishable by tag type (`LIST` vs `COMPOUND`); the count key still uses `COMPONENTS_REWORK`. Test: `pre263PotDecorationsListIsScanned`. `./gradlew test` passes.

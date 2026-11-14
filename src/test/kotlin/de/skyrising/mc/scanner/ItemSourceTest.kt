@@ -133,6 +133,36 @@ class ItemSourceTest {
     }
 
     @Test
+    fun pre263PotDecorationsListIsScanned() {
+        // Before 26.3 the component is a list of 4 item IDs; default faces are bricks.
+        val pot = CompoundTag(
+            mutableMapOf(
+                "id" to StringTag("minecraft:decorated_pot"),
+                "count" to IntTag(1),
+                "components" to CompoundTag(
+                    mutableMapOf(
+                        "minecraft:pot_decorations" to ListTag(listOf(
+                            StringTag("minecraft:angler_pottery_sherd"),
+                            StringTag("minecraft:brick"),
+                            StringTag("minecraft:archer_pottery_sherd"),
+                            StringTag("minecraft:air"),
+                        ))
+                    )
+                ),
+            )
+        )
+        val result = scanInventory(
+            ListTag(listOf(pot)),
+            listOf(needle("minecraft:angler_pottery_sherd"), needle("minecraft:archer_pottery_sherd")),
+            false, ver,
+        )
+        assertEquals(1L, result[0].getLong(needle("minecraft:angler_pottery_sherd")))
+        assertEquals(1L, result[0].getLong(needle("minecraft:archer_pottery_sherd")))
+        // Default brick faces are not counted as items.
+        assertEquals(0L, result[0].getLong(needle("minecraft:brick")))
+    }
+
+    @Test
     fun missingCountDefaultsToOne() {
         val slots = ListTag(listOf(CompoundTag(mutableMapOf("id" to StringTag("minecraft:stone")))))
         assertEquals(1L, scanInventory(slots, listOf(needle("minecraft:stone")), false, ver)[0].getLong(needle("minecraft:stone")))

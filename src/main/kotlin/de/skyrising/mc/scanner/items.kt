@@ -178,6 +178,14 @@ fun nestedItemLists(slot: CompoundTag, version: Int): List<ListTag<CompoundTag>>
                 if (decorations.has(face, Tag.COMPOUND)) decorations.getCompound(face) else null
             }
             if (items.isNotEmpty()) lists.add(ListTag(items))
+        } else if (components.has("minecraft:pot_decorations", Tag.LIST)) {
+            // Pre-26.3: a list of 4 item IDs (sherds); default faces are bricks.
+            val countKey = if (version >= DataVersion.COMPONENTS_REWORK) "count" else "Count"
+            val decorations = components["minecraft:pot_decorations"] as ListTag<*>
+            val items = decorations.mapNotNull { (it as? StringTag)?.value }
+                .filter { it != "minecraft:air" && it != "minecraft:brick" }
+                .map { CompoundTag(mutableMapOf("id" to StringTag(it), countKey to IntTag(1))) }
+            if (items.isNotEmpty()) lists.add(ListTag(items))
         }
     } else {
         if (slot.has("tag", Tag.COMPOUND)) {
