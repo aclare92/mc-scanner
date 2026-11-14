@@ -37,4 +37,7 @@ A count of items by type — item → total count, with no per-location detail a
 _Avoid_: dump, summary
 
 **export**:
-Materialising items back into a world or schematic (e.g. packing them into shulker boxes and writing a litematica file). Deferred; not implemented.
+Materialising scanned items back into a schematic: pack them into shulker boxes inside barrels, then write a Litematica `.litematic` and a vanilla structure `.nbt`. Specified in `.scratch/export/spec.md`; not yet implemented.
+
+**schematic**:
+A file that places blocks and block entities into a world — either a Litematica `.litematic` (bit-packed block states) or a vanilla structure block `.nbt` (explicit block list). Export writes both.
