@@ -45,23 +45,33 @@ sealed class Tag {
             listOf("{}", "entities", "[]", "{}")
         )
 
-        private val idToTag = Array<Class<*>>(13) { EndTag::class.java }
-        private val idToType = Array<TagType<*>>(13) { EndTag }
         private val tagToId = Reference2IntOpenHashMap<Class<*>>(13)
 
-        private fun <T: Tag> register(cls: KClass<T>, id: Int, type: TagType<T>) {
-            idToTag[id] = cls.java
-            idToType[id] = type
+        private fun register(cls: KClass<*>, id: Int) {
             tagToId[cls.java] = id
         }
 
         fun getId(tag: Tag) = tagToId.getInt(tag::class.java)
         fun <T: Tag> getId(type: KClass<T>) = tagToId.getInt(type.java)
 
-        fun getReader(id: Int) = try {
-            idToType[id]
-        } catch (_: ArrayIndexOutOfBoundsException) {
-            throw IllegalArgumentException("Unknown tag type $id")
+        // Resolve the reader at call time rather than caching companion objects during
+        // this companion's initialization: a tag companion dereferenced from `init` can
+        // still be null if it has not finished initializing yet (class-init ordering).
+        fun getReader(id: Int): TagType<*> = when (id) {
+            END -> EndTag
+            BYTE -> ByteTag.Companion
+            SHORT -> ShortTag.Companion
+            INT -> IntTag.Companion
+            LONG -> LongTag.Companion
+            FLOAT -> FloatTag.Companion
+            DOUBLE -> DoubleTag.Companion
+            BYTE_ARRAY -> ByteArrayTag.Companion
+            STRING -> StringTag.Companion
+            LIST -> ListTag.Companion
+            COMPOUND -> CompoundTag.Companion
+            INT_ARRAY -> IntArrayTag.Companion
+            LONG_ARRAY -> LongArrayTag.Companion
+            else -> throw IllegalArgumentException("Unknown tag type $id")
         }
 
         inline fun read(id: Int, din: DataInput) = getReader(id).read(din)
@@ -74,19 +84,19 @@ sealed class Tag {
         }
 
         init {
-            register(EndTag::class, END, EndTag)
-            register(ByteTag::class, BYTE, ByteTag.Companion)
-            register(ShortTag::class, SHORT, ShortTag.Companion)
-            register(IntTag::class, INT, IntTag.Companion)
-            register(LongTag::class, LONG, LongTag.Companion)
-            register(FloatTag::class, FLOAT, FloatTag.Companion)
-            register(DoubleTag::class, DOUBLE, DoubleTag.Companion)
-            register(ByteArrayTag::class, BYTE_ARRAY, ByteArrayTag.Companion)
-            register(StringTag::class, STRING, StringTag.Companion)
-            register(ListTag::class, LIST, ListTag.Companion)
-            register(CompoundTag::class, COMPOUND, CompoundTag.Companion)
-            register(IntArrayTag::class, INT_ARRAY, IntArrayTag.Companion)
-            register(LongArrayTag::class, LONG_ARRAY, LongArrayTag.Companion)
+            register(EndTag::class, END)
+            register(ByteTag::class, BYTE)
+            register(ShortTag::class, SHORT)
+            register(IntTag::class, INT)
+            register(LongTag::class, LONG)
+            register(FloatTag::class, FLOAT)
+            register(DoubleTag::class, DOUBLE)
+            register(ByteArrayTag::class, BYTE_ARRAY)
+            register(StringTag::class, STRING)
+            register(ListTag::class, LIST)
+            register(CompoundTag::class, COMPOUND)
+            register(IntArrayTag::class, INT_ARRAY)
+            register(LongArrayTag::class, LONG_ARRAY)
         }
     }
 }

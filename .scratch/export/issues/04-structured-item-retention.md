@@ -1,7 +1,7 @@
 # 04 — Structured item retention
 
 **Type:** task
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Goal
 
@@ -21,4 +21,4 @@ A collection path that retains each item slot's full `CompoundTag` during the ex
 
 ## Comments
 
-_None yet._
+- **Implemented.** `dumpItemStacksRaw(items)` in `items.kt` returns the top-level slot compounds verbatim (the original tags, not copies) and deliberately does **not** recurse into nested containers, so a filled shulker box stays one item with its `minecraft:container` intact. Tests in `ItemRetentionTest.kt` cover shulker/bundle/crossbow components and id-less slot skipping. `./gradlew test` passes.

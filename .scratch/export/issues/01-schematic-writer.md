@@ -1,7 +1,7 @@
 # 01 — Schematic NBT writer (Litematica + vanilla structure)
 
 **Type:** task
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Goal
 
@@ -55,4 +55,6 @@ Both are **gzip-compressed big-endian binary NBT** with an unnamed root compound
 
 ## Comments
 
-_None yet._
+- **Implemented.** `src/main/kotlin/de/skyrising/mc/scanner/schematic.kt` (`PlacedBarrel`, `Schematic`, `toLitematicaNbt`, `toVanillaStructureNbt`, `writeLitematica`, `writeVanillaStructure`) with `src/test/kotlin/de/skyrising/mc/scanner/SchematicTest.kt`. Covers single-barrel round-trip, a second barrel at a 1-block gap, and the vanilla structure shape. `./gradlew build` passes (28 tests).
+- **Latent bug found and fixed in `nbt.kt`.** `Tag.Companion`'s `init` registered tag readers by dereferencing each tag's companion object (e.g. `IntTag.Companion`). When `Tag.read(...)` was the very first `Tag` access, that companion could still be `null` mid-initialization, leaving `getReader(INT)` null and every read NPE-ing. `getReader` now resolves readers at call time via a `when`, and `init` only records the class→id map. This was pre-existing but only surfaced once a test read NBT on a cold class-init path.
+- Note: region `Position` is `{0,0,0}` (schematic origin); tile-entity coordinates are region-local. Do not write `max_stack_size`.

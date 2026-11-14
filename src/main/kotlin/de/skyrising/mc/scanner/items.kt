@@ -235,3 +235,12 @@ fun dumpItemStacks(items: ListTag<CompoundTag>, version: Int): List<ItemStackEnt
     walk(items)
     return out
 }
+
+/**
+ * Retains each top-level item stack verbatim, for lossless [export]. Unlike
+ * [dumpItemStacks] this does not recurse into nested containers: a filled shulker
+ * box stays one item whose contents remain in its `minecraft:container` component.
+ * The returned tags are the original slot compounds, not copies.
+ */
+fun dumpItemStacksRaw(items: ListTag<CompoundTag>): List<CompoundTag> =
+    items.filter { it.has("id", Tag.STRING) }
