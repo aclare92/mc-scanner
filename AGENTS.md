@@ -8,7 +8,7 @@ Kotlin/JVM CLI that scans Minecraft world or region files for blocks and items, 
 - `./gradlew build` — compile, run tests, and assemble.
 - `./gradlew test` — tests only.
 - Single test: `./gradlew test --tests "de.skyrising.mc.scanner.zlib.TestDeflate.smartHuffmanSimple"`
-- Runnable fat jar: `./gradlew shadowJar` → `build/libs/mc-scanner-<version>.jar`. Version comes from `gradle.properties` (currently `0.8.0`). `shadowJar` also triggers `distTar`/`distZip`.
+- Runnable fat jar: `./gradlew shadowJar` → `build/libs/mc-scanner-<version>.jar`. Version comes from `gradle.properties` (currently `0.9.0`). `shadowJar` also triggers `distTar`/`distZip`.
 - Run from Gradle: `./gradlew run --args="-i minecraft:sponge -b minecraft:sponge <world-dir> out.zip"`
 
 ## Architecture
