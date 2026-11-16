@@ -8,16 +8,16 @@ Kotlin/JVM CLI that scans Minecraft world or region files for blocks and items, 
 - `./gradlew build` — compile, run tests, and assemble.
 - `./gradlew test` — tests only.
 - Single test: `./gradlew test --tests "de.skyrising.mc.scanner.zlib.TestDeflate.smartHuffmanSimple"`
-- Runnable fat jar: `./gradlew shadowJar` → `build/libs/mc-scanner-<version>.jar`. Version comes from `gradle.properties` (currently `0.6.0`). `shadowJar` also triggers `distTar`/`distZip`.
+- Runnable fat jar: `./gradlew shadowJar` → `build/libs/mc-scanner-<version>.jar`. Version comes from `gradle.properties` (currently `0.8.0`). `shadowJar` also triggers `distTar`/`distZip`.
 - Run from Gradle: `./gradlew run --args="-i minecraft:sponge -b minecraft:sponge <world-dir> out.zip"`
 
 ## Architecture
 
 - `scanner.kt` is the CLI entrypoint (`main`): parses options, picks a scan script, builds the input file list, then scans files in parallel.
-- Scan behaviour is not in compiled Kotlin classes. It lives in Kotlin scripts at `src/main/resources/scripts/*.scan.kts`, evaluated at runtime via `kotlin-scripting-jvm-host`. Mode dispatch: `--stats` → `stats.scan.kts`, `--geode` → `geode.scan.kts`, a first non-option arg ending in `.scan.kts` → that file, otherwise `search.scan.kts`.
+- Scan behaviour is not in compiled Kotlin classes. It lives in Kotlin scripts at `src/main/resources/scripts/*.scan.kts`, evaluated at runtime via `kotlin-scripting-jvm-host`. Mode dispatch: `--stats` → `stats.scan.kts`, `--geode` → `geode.scan.kts`, `--export` → `export.scan.kts`, a first non-option arg ending in `.scan.kts` → that file, otherwise `search.scan.kts`.
 - A script configures the `Scan` object through `collect`, `scan`, `onResults`, and `after`. Only types listed in `ScannerScriptConfiguration.defaultImports` are in scope; add new ones there.
-- Core packages: `nbt.kt` (NBT tags), `region/` (`.mca` reader), `region.kt` (chunk scanning), `needles.kt` (query targets `BlockState`, `BlockIdMask`, `ItemType`, plus flattening maps), `zlib/` (bundled inflate), `inventories.kt` (player and inventory scanning).
-- Input is either one `.mca` file or a world directory. `getHaystack` reads `playerdata/*.dat`, `region/`, `DIM-1/region/`, and `DIM1/region/`.
+- Core packages: `nbt.kt` (NBT tags), `region/` (`.mca` reader), `region.kt` (chunk scanning), `needles.kt` (query targets `BlockState`, `BlockIdMask`, `ItemType`, plus flattening maps), `zlib/` (bundled inflate), `inventories.kt` (player and inventory scanning), `export-items.kt` (export filtering/unpacking), `packing.kt` (five-grid export packing), `player-names.kt` (best-effort UUID → name lookup), `manifest.kt` and `schematic.kt` (export outputs).
+- Input is either one `.mca` file or a world directory. `getHaystack` reads `players/data/*.dat` (or legacy `playerdata/*.dat`), region files, entity files, and the 26.1+ `dimensions/<namespace>/<dim>` layout.
 - Older worlds are deliberately supported. `constants.kt` holds `DataVersion` thresholds; parsing branches for pre-1.13 numeric IDs, packed block states, the 1.18 `block_states` container, and the `Level` wrapper removal. Keep every branch working.
 - `buildSrc/.../gen/random-ticks.kt` generates `build/generated/kotlin/.../random-ticks.kt` on every `compileKotlin` (random-tick geometry constants used by `geode.scan.kts`). Edit the generator, never the generated file.
 - Custom inflate is the default (`DECOMPRESSOR = INTERNAL`); `--decompressor java` switches to `java.util.zip`. `zlib/` is the only code with tests.

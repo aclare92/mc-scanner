@@ -21,14 +21,117 @@ data class ItemSource(
     val version: Int,
 )
 
-/** Where items live inside a block entity, at the given data version. */
-fun blockEntitySources(be: CompoundTag, version: Int, dimension: String): List<ItemSource> {
+/**
+ * True when [slot] is a shulker box with nothing to bring over: no items and no
+ * loot table. Empty boxes are excluded everywhere (report, stats, packing and
+ * export) so they do not flood the migration with meaningless packaging.
+ * A box with `minecraft:container_loot` is not empty: its contents are generated
+ * when it is first opened.
+ */
+fun isEmptyShulkerBox(slot: CompoundTag, version: Int): Boolean {
+    if (!slot.has("id", Tag.STRING) || !isShulkerBoxId(slot.getString("id"))) return false
+    if (version >= DataVersion.COMPONENTS_REWORK) {
+        if (!slot.has("components", Tag.COMPOUND)) return true
+        val components = slot.getCompound("components")
+        if (components.has("minecraft:container_loot", Tag.COMPOUND)) return false
+        if (!components.has("minecraft:container", Tag.LIST)) return true
+        return components.getList<CompoundTag>("minecraft:container").none { entry ->
+            val item = entry["item"] as? CompoundTag ?: return@none false
+            item.has("id", Tag.STRING) && itemCount(item, version) > 0
+        }
+    }
+    // Pre-component shulker contents live in tag.BlockEntityTag.Items.
+    val tag = if (slot.has("tag", Tag.COMPOUND)) slot.getCompound("tag") else null
+    val blockEntityTag = tag?.takeIf { it.has("BlockEntityTag", Tag.COMPOUND) }?.getCompound("BlockEntityTag")
+    if (blockEntityTag == null || !blockEntityTag.has("Items", Tag.LIST)) return true
+    return blockEntityTag.getList<CompoundTag>("Items").none {
+        it.has("id", Tag.STRING) && itemCount(it, version) > 0
+    }
+}
+
+/**
+ * A box's own components — custom name, lore, loot table, custom data, … —
+ * excluding the `minecraft:container` that holds its contents. Null for a plain
+ * box whose only component is its contents. Export requires post-1.20.5 boxes,
+ * so the legacy `tag.BlockEntityTag` identity is not considered here.
+ */
+fun boxIdentityComponents(box: Map<String, Tag>): CompoundTag? {
+    val components = box["components"] as? CompoundTag ?: return null
+    val identity = components.value.filterKeys { it != "minecraft:container" }
+    return if (identity.isEmpty()) null else CompoundTag(identity.toMutableMap())
+}
+
+/**
+ * True when a box carries identity NBT beyond its contents. These are most
+ * likely player boxes (named, labelled, or loot-bearing) and are placed in a
+ * separate section of the export so they can be browsed without sifting the
+ * generated packaging.
+ */
+fun hasBoxIdentityComponents(box: Map<String, Tag>): Boolean = boxIdentityComponents(box) != null
+
+/**
+ * Rebuild the item form of a placed shulker box. A placed box is a block entity,
+ * so without this its `Items` are exported as loose items and the box itself
+ * (including its `CustomName`) is lost. [blockId] is the block's actual id
+ * (`minecraft:red_shulker_box`), read from the chunk palette; the block entity
+ * id alone is always the plain `minecraft:shulker_box`.
+ */
+private fun placedShulkerBoxItem(be: CompoundTag, blockId: String): CompoundTag {
+    val components = mutableMapOf<String, Tag>()
+    val items = if (be.has("Items", Tag.LIST)) be.getList<CompoundTag>("Items") else ListTag(emptyList<CompoundTag>())
+    if (items.isNotEmpty()) {
+        components["minecraft:container"] = ListTag(items.mapIndexed { index, slot ->
+            val slotIndex = when {
+                slot.has("Slot", Tag.INTEGER) -> slot.getInt("Slot")
+                slot.has("slot", Tag.INTEGER) -> slot.getInt("slot")
+                else -> index
+            }
+            val item = CompoundTag(slot.filterKeys { it != "Slot" && it != "slot" }.toMutableMap())
+            CompoundTag(mutableMapOf("slot" to IntTag(slotIndex), "item" to item))
+        })
+    } else if (be.has("LootTable", Tag.STRING)) {
+        // Contents are generated on first open; preserve that instead of exporting an empty box.
+        val loot = mutableMapOf<String, Tag>("loot_table" to be.getValue("LootTable"))
+        if (be.has("LootTableSeed", Tag.LONG)) loot["seed"] = be.getValue("LootTableSeed")
+        components["minecraft:container_loot"] = CompoundTag(loot)
+    }
+    // CustomName is already a text component (or a string the game parses); copy it verbatim.
+    be["CustomName"]?.let { components["minecraft:custom_name"] = it }
+    val root = mutableMapOf<String, Tag>(
+        "id" to StringTag(blockId),
+        "count" to IntTag(1),
+    )
+    if (components.isNotEmpty()) root["components"] = CompoundTag(components)
+    return CompoundTag(root)
+}
+
+/**
+ * Where items live inside a block entity, at the given data version.
+ *
+ * [blockId] is only needed for placed shulker boxes, whose item colour comes
+ * from the block state rather than the block entity.
+ */
+fun blockEntitySources(be: CompoundTag, version: Int, dimension: String, blockId: String? = null): List<ItemSource> {
     val pos = BlockPos(dimension, be.getInt("x"), be.getInt("y"), be.getInt("z"))
-    val location = Container(be.getString("id"), pos)
+    val beId = be.getString("id")
+    val location = Container(beId, pos)
     val sources = mutableListOf<ItemSource>()
 
     // Unresolved loot table (contents generated on first open, not from NBT)
     if (be.has("LootTable", Tag.STRING)) LOOT_CONTAINERS.incrementAndGet()
+
+    // A placed shulker box is an item that happens to be placed. Keep the box
+    // whole (name + contents) instead of exporting its contents as loose items.
+    // Empty boxes are building blocks here: they produce no item, so they do
+    // not flood the migration with empty packaging.
+    // Pre-component worlds are left on the old contents-only path; export
+    // rejects them anyway.
+    if (version >= DataVersion.COMPONENTS_REWORK && isShulkerBoxId(beId)) {
+        val itemId = blockId?.takeIf(::isShulkerBoxId) ?: beId
+        val box = placedShulkerBoxItem(be, itemId)
+        if (isEmptyShulkerBox(box, version) && !hasBoxIdentityComponents(box)) return emptyList()
+        return listOf(ItemSource(location, ListTag(listOf(box)), version))
+    }
 
     // Generic container list (chest, barrel, hopper, furnace, dispenser, dropper, chiseled bookshelf, ...)
     if (be.has("Items", Tag.LIST)) {
@@ -156,14 +259,16 @@ data class EntityRegionFile(private val path: Path) : Scannable {
 val LOOT_CONTAINERS = AtomicInteger()
 
 /** The nested item-stack lists held inside an item stack (shulker boxes, bundles, crossbows, pots). */
-fun nestedItemLists(slot: CompoundTag, version: Int): List<ListTag<CompoundTag>> {
+fun nestedItemLists(slot: CompoundTag, version: Int, countLoot: Boolean = true): List<ListTag<CompoundTag>> {
     val lists = mutableListOf<ListTag<CompoundTag>>()
     if (version >= DataVersion.COMPONENTS_REWORK) {
         if (!slot.has("components", Tag.COMPOUND)) return emptyList()
         val components = slot.getCompound("components")
-        if (components.has("minecraft:container_loot", Tag.COMPOUND)) LOOT_CONTAINERS.incrementAndGet()
+        if (countLoot && components.has("minecraft:container_loot", Tag.COMPOUND)) LOOT_CONTAINERS.incrementAndGet()
         if (components.has("minecraft:container", Tag.LIST)) {
-            val items = components.getList<CompoundTag>("minecraft:container").map { it.getCompound("item") }.toMutableList()
+            val items = components.getList<CompoundTag>("minecraft:container")
+                .mapNotNull { it["item"] as? CompoundTag }
+                .toMutableList()
             lists.add(ListTag(items))
         }
         if (components.has("minecraft:bundle_contents", Tag.LIST)) {
@@ -204,7 +309,14 @@ fun chunkItemSources(data: CompoundTag, version: Int, dimension: String): List<I
     val sources = mutableListOf<ItemSource>()
     val blockEntitiesTag = if (version >= DataVersion.REMOVE_LEVEL_TAG) "block_entities" else "TileEntities"
     if (data.has(blockEntitiesTag, Tag.LIST)) {
-        for (be in data.getList<CompoundTag>(blockEntitiesTag)) sources += blockEntitySources(be, version, dimension)
+        for (be in data.getList<CompoundTag>(blockEntitiesTag)) {
+            val blockId = if (be.has("id", Tag.STRING) && isShulkerBoxId(be.getString("id"))) {
+                blockIdAt(data, version, be.getInt("x"), be.getInt("y"), be.getInt("z"))
+            } else {
+                null
+            }
+            sources += blockEntitySources(be, version, dimension, blockId)
+        }
     }
     val entitiesTag = if (version >= DataVersion.REMOVE_LEVEL_TAG) "entities" else "Entities"
     if (data.has(entitiesTag, Tag.LIST)) {
@@ -236,6 +348,7 @@ fun dumpItemStacks(items: ListTag<CompoundTag>, version: Int): List<ItemStackEnt
     fun walk(list: ListTag<CompoundTag>) {
         for (slot in list) {
             if (!slot.has("id", Tag.STRING)) continue
+            if (isEmptyShulkerBox(slot, version)) continue
             out += ItemStackEntry(slot.getString("id"), itemCount(slot, version), itemStackNbt(slot))
             for (nested in nestedItemLists(slot, version)) walk(nested)
         }
@@ -248,7 +361,9 @@ fun dumpItemStacks(items: ListTag<CompoundTag>, version: Int): List<ItemStackEnt
  * Retains each top-level item stack verbatim, for lossless [export]. Unlike
  * [dumpItemStacks] this does not recurse into nested containers: a filled shulker
  * box stays one item whose contents remain in its `minecraft:container` component.
- * The returned tags are the original slot compounds, not copies.
+ * Empty boxes are retained too; export's scan totals need them, and the export
+ * pipeline drops or unpacks them later. The returned tags are the original slot
+ * compounds, not copies.
  */
 fun dumpItemStacksRaw(items: ListTag<CompoundTag>): List<CompoundTag> =
     items.filter { it.has("id", Tag.STRING) }

@@ -30,6 +30,142 @@ class ItemSourceTest {
     }
 
     @Test
+    fun placedShulkerBoxBecomesOneContainerItem() {
+        val be = CompoundTag(
+            mutableMapOf(
+                "id" to StringTag("minecraft:shulker_box"),
+                "x" to IntTag(0), "y" to IntTag(0), "z" to IntTag(0),
+                "CustomName" to StringTag("Redstone Kit"),
+                "Items" to ListTag(listOf(
+                    CompoundTag(mutableMapOf(
+                        "Slot" to ByteTag(0),
+                        "id" to StringTag("minecraft:redstone"),
+                        "count" to IntTag(64),
+                    )),
+                )),
+            )
+        )
+        val sources = blockEntitySources(be, ver, "overworld", "minecraft:red_shulker_box")
+        assertEquals(1, sources.size)
+
+        val box = sources[0].items.single()
+        assertEquals("minecraft:red_shulker_box", box.getString("id"))
+        assertEquals(1, box.getInt("count"))
+        val components = box.getCompound("components")
+        assertEquals("Redstone Kit", components.getString("minecraft:custom_name"))
+        val container = components.getList<CompoundTag>("minecraft:container")
+        assertEquals(1, container.size)
+        assertEquals(0, container[0].getInt("slot"))
+        assertEquals("minecraft:redstone", container[0].getCompound("item").getString("id"))
+        assertEquals(64, container[0].getCompound("item").getInt("count"))
+
+        // The report counts the box itself in addition to its contents.
+        val result = scanInventory(sources[0].items, emptyList(), true, ver)[0]
+        assertEquals(1L, result.getLong(ItemType(Identifier.of("minecraft:red_shulker_box"))))
+        assertEquals(64L, result.getLong(ItemType(Identifier.of("minecraft:redstone"))))
+    }
+
+    @Test
+    fun emptyUnnamedPlacedShulkerBoxIsNotAnItem() {
+        val be = CompoundTag(
+            mutableMapOf(
+                "id" to StringTag("minecraft:shulker_box"),
+                "x" to IntTag(0), "y" to IntTag(0), "z" to IntTag(0),
+            )
+        )
+        assertEquals(emptyList(), blockEntitySources(be, ver, "overworld"))
+    }
+
+    @Test
+    fun emptyNamedPlacedShulkerBoxIsKept() {
+        val be = CompoundTag(
+            mutableMapOf(
+                "id" to StringTag("minecraft:shulker_box"),
+                "x" to IntTag(0), "y" to IntTag(0), "z" to IntTag(0),
+                "CustomName" to StringTag("Empty Kit"),
+            )
+        )
+        val box = blockEntitySources(be, ver, "overworld").single().items.single()
+        assertEquals("Empty Kit", box.getCompound("components").getString("minecraft:custom_name"))
+    }
+
+    @Test
+    fun emptyStoredShulkerBoxIsRetainedRawButSkippedByReport() {
+        val empty = CompoundTag(mutableMapOf(
+            "id" to StringTag("minecraft:gray_shulker_box"),
+            "count" to IntTag(64),
+        ))
+        val filled = CompoundTag(mutableMapOf(
+            "id" to StringTag("minecraft:gray_shulker_box"),
+            "count" to IntTag(1),
+            "components" to CompoundTag(mutableMapOf(
+                "minecraft:container" to ListTag(listOf(
+                    CompoundTag(mutableMapOf("slot" to IntTag(0), "item" to slot("minecraft:stone", "count", 3))),
+                )),
+            )),
+        ))
+        val slots = ListTag(listOf(empty, filled, slot("minecraft:dirt", "count", 5)))
+
+        val raw = dumpItemStacksRaw(slots)
+        assertEquals(
+            listOf("minecraft:gray_shulker_box", "minecraft:gray_shulker_box", "minecraft:dirt"),
+            raw.map { it.getString("id") },
+        )
+
+        val result = scanInventory(slots, emptyList(), true, ver)[0]
+        assertEquals(1L, result.getLong(ItemType(Identifier.of("minecraft:gray_shulker_box"))))
+        assertEquals(3L, result.getLong(ItemType(Identifier.of("minecraft:stone"))))
+        assertEquals(5L, result.getLong(ItemType(Identifier.of("minecraft:dirt"))))
+    }
+
+    @Test
+    fun placedShulkerLootTableIsPreserved() {
+        val be = CompoundTag(
+            mutableMapOf(
+                "id" to StringTag("minecraft:shulker_box"),
+                "x" to IntTag(0), "y" to IntTag(0), "z" to IntTag(0),
+                "LootTable" to StringTag("minecraft:chests/end_city_treasure"),
+                "LootTableSeed" to LongTag(42L),
+            )
+        )
+        val box = blockEntitySources(be, ver, "overworld").single().items.single()
+        val loot = box.getCompound("components").getCompound("minecraft:container_loot")
+        assertEquals("minecraft:chests/end_city_treasure", loot.getString("loot_table"))
+        assertEquals(42L, (loot["seed"] as LongTag).value)
+    }
+
+    @Test
+    fun chunkItemSourcesReadsShulkerColourFromChunk() {
+        // One section: palette [air, red_shulker_box], index (1, 2, 3) = red box.
+        val bits = 4
+        val states = LongArray(256)
+        val index = 2 * 256 + 3 * 16 + 1
+        states[index * bits ushr 6] = 1L shl ((index * bits) and 63)
+        val section = CompoundTag(mutableMapOf(
+            "Y" to IntTag(0),
+            "block_states" to CompoundTag(mutableMapOf(
+                "palette" to ListTag(listOf(
+                    CompoundTag(mutableMapOf("Name" to StringTag("minecraft:air"))),
+                    CompoundTag(mutableMapOf("Name" to StringTag("minecraft:red_shulker_box"))),
+                )),
+                "data" to LongArrayTag(states),
+            )),
+        ))
+        val chunk = CompoundTag(mutableMapOf(
+            "sections" to ListTag(listOf(section)),
+            "block_entities" to ListTag(listOf(CompoundTag(mutableMapOf(
+                "id" to StringTag("minecraft:shulker_box"),
+                "x" to IntTag(1), "y" to IntTag(2), "z" to IntTag(3),
+                "Items" to ListTag(listOf(slot("minecraft:redstone", "count", 3))),
+            )))),
+        ))
+
+        val sources = chunkItemSources(chunk, ver, "overworld")
+        assertEquals(1, sources.size)
+        assertEquals("minecraft:red_shulker_box", sources[0].items.single().getString("id"))
+    }
+
+    @Test
     fun blockEntitySourcesReadsSingleItemHolders() {
         val jukebox = CompoundTag(
             mutableMapOf(

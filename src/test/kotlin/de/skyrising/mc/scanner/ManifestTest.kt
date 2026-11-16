@@ -1,9 +1,11 @@
 package de.skyrising.mc.scanner
 
 import java.nio.file.Files
+import java.util.UUID
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ManifestTest {
@@ -22,69 +24,145 @@ class ManifestTest {
         }),
     ))
 
+    private fun sourceBox(name: String? = null, contents: List<CompoundTag> = listOf(item("minecraft:stone", 64))): CompoundTag {
+        val components = mutableMapOf<String, Tag>()
+        if (contents.isNotEmpty()) components["minecraft:container"] =
+            container(*contents.toTypedArray()).getValue("minecraft:container")
+        if (name != null) components["minecraft:custom_name"] = StringTag(name)
+        return CompoundTag(mutableMapOf(
+            "id" to StringTag("minecraft:gray_shulker_box"),
+            "count" to IntTag(1),
+        ).apply { if (components.isNotEmpty()) this["components"] = CompoundTag(components) })
+    }
+
+    private fun layoutForNonPlayer(items: List<CompoundTag>) = ExportLayout(
+        PlayerPacking(emptyList()),
+        packNonPlayer(items, ver),
+    )
+
     @Test
-    fun manifestListsPlacedItems() {
-        val result = packIntoBarrels(listOf(item("minecraft:stone", 100)), ver)
-        val rows = manifestRows(result.barrels, ver)
+    fun generatedPackagingGetsNoBoxRow() {
+        val layout = layoutForNonPlayer(listOf(item("minecraft:stone", 27 * 64)))
+        val rows = buildManifestRows(layout, ver)
+
+        assertEquals(27, rows.size)
+        assertTrue(rows.all { it.kind == ManifestKind.ITEM && it.grid == ExportGrid.BULK })
+        assertEquals((0 until 27).toList(), rows.map { it.boxSlot })
+        assertEquals(listOf(0), rows.map { it.barrelSlot }.distinct())
+        assertEquals(listOf(0), rows.map { it.barrelX }.distinct())
+    }
+
+    @Test
+    fun remainderRowsRecordBoxSlotAndBarrelSlot() {
+        val layout = layoutForNonPlayer(listOf(item("minecraft:stone", 100)))
+        val rows = buildManifestRows(layout, ver)
+
         assertEquals(2, rows.size)
+        assertEquals(listOf(0, 1), rows.map { it.boxSlot })
         assertEquals(listOf(64L, 36L), rows.map { it.count })
-        assertTrue(rows.all { it.barrelX == 0 && it.barrelZ == 0 && it.shulkerSlot == 0 })
-        assertTrue(rows.all { it.itemId == "minecraft:stone" })
+        assertTrue(rows.all { it.grid == ExportGrid.REMAINDER })
     }
 
     @Test
-    fun totalsCountContainerAndContents() {
-        val filled = item("minecraft:shulker_box", 1, container(item("minecraft:stone", 64)))
-        val totals = exportTotals(listOf(filled), ver)
-        assertEquals(1L, totals["minecraft:shulker_box"])
-        assertEquals(64L, totals["minecraft:stone"])
+    fun identityBoxGetsBoxRowAndContentRows() {
+        val layout = layoutForNonPlayer(listOf(sourceBox(name = "Kit")))
+        val rows = buildManifestRows(layout, ver)
+
+        assertEquals(2, rows.size)
+        val box = rows.single { it.kind == ManifestKind.BOX }
+        val content = rows.single { it.kind == ManifestKind.ITEM }
+        assertEquals(ExportGrid.IDENTITY, box.grid)
+        assertNull(box.boxSlot)
+        assertTrue(box.nbt.contains("Kit"))
+        assertEquals(ExportGrid.IDENTITY, content.grid)
+        assertEquals(0, content.boxSlot)
+        assertEquals("minecraft:stone", content.itemId)
     }
 
     @Test
-    fun totalsKeyDamageLikeReport() {
-        val damaged = item("minecraft:stone_sword", 1, CompoundTag(
-            mutableMapOf("minecraft:damage" to IntTag(39)),
-        ))
-        assertEquals(mapOf("minecraft:stone_sword.39" to 1L), exportTotals(listOf(damaged), ver))
+    fun playerRowsCarrySourceAndSourceSlot() {
+        val uuid = UUID.randomUUID()
+        val layout = ExportLayout(
+            packPlayerSections(
+                listOf(PlayerItem(uuid, PlayerSource.INVENTORY, 5, item("minecraft:stone", 3))),
+                mapOf(uuid to "Alice"),
+            ),
+            packNonPlayer(emptyList(), ver, startZ = 3),
+        )
+        val row = buildManifestRows(layout, ver).single()
+
+        assertEquals(ManifestKind.ITEM, row.kind)
+        assertEquals(ExportGrid.PLAYER, row.grid)
+        assertEquals("Alice", row.player)
+        assertEquals(PlayerSource.INVENTORY, row.source)
+        assertEquals(5, row.sourceSlot)
+        assertNull(row.boxSlot)
+        assertEquals(3L, row.count)
     }
 
     @Test
-    fun totalsDoNotCountGeneratedPackaging() {
-        val totals = exportTotals(listOf(item("minecraft:stone", 100)), ver)
-        assertEquals(mapOf("minecraft:stone" to 100L), totals)
+    fun playerCarriedBoxGetsBoxRowAndContents() {
+        val uuid = UUID.randomUUID()
+        val box = sourceBox(name = "Kit")
+        val layout = ExportLayout(
+            packPlayerSections(
+                listOf(PlayerItem(uuid, PlayerSource.ENDER_CHEST, 2, box)),
+                mapOf(uuid to "Alice"),
+            ),
+            packNonPlayer(emptyList(), ver, startZ = 3),
+        )
+        val rows = buildManifestRows(layout, ver)
+
+        val boxRow = rows.single { it.kind == ManifestKind.BOX }
+        val contentRow = rows.single { it.kind == ManifestKind.ITEM }
+        assertEquals(ExportGrid.PLAYER, boxRow.grid)
+        assertEquals("Alice", boxRow.player)
+        assertEquals(PlayerSource.ENDER_CHEST, boxRow.source)
+        assertEquals(2, boxRow.sourceSlot)
+        assertEquals(ExportGrid.PLAYER, contentRow.grid)
+        assertEquals("Alice", contentRow.player)
+        assertEquals(0, contentRow.boxSlot)
     }
 
     @Test
-    fun diffDetectsMissingAndMismatched() {
-        val report = mapOf("minecraft:stone" to 100L, "minecraft:dirt" to 5L)
-        val export = mapOf("minecraft:stone" to 90L, "minecraft:sword" to 3L)
-        val diff = diffTotals(report, export)
-        assertEquals(setOf("minecraft:dirt"), diff.onlyInReport)
-        assertEquals(setOf("minecraft:sword"), diff.onlyInExport)
-        assertEquals(listOf("minecraft:stone" to (100L to 90L)), diff.countMismatches)
-        assertTrue(!diff.isEmpty)
+    fun totalsCountEmptyBoxesAndReportDropped() {
+        val empty = item("minecraft:shulker_box", 1)
+        val scanned = countItems(listOf(empty), ver)
+        assertEquals(mapOf("minecraft:shulker_box" to 1L), scanned)
+
+        val totals = buildTotals(scanned, emptyMap()).single()
+        assertEquals(1L, totals.scanned)
+        assertEquals(0L, totals.exported)
+        assertEquals(1L, totals.dropped)
     }
 
     @Test
-    fun identicalTotalsHaveEmptyDiff() {
-        val totals = mapOf("minecraft:stone" to 100L)
-        assertTrue(diffTotals(totals, totals).isEmpty)
-    }
-
-    @Test
-    fun writesCsvAndReadsCounts() {
+    fun writesManifestAndTotalsWithNewHeaders() {
         val dir = createTempDirectory("manifest-test")
         try {
-            writeManifest(manifestRows(packIntoBarrels(listOf(item("minecraft:stone", 70)), ver).barrels, ver),
-                dir.resolve("manifest.csv"))
-            val manifest = Files.readAllLines(dir.resolve("manifest.csv"))
-            assertEquals("barrel_x,barrel_z,shulker_slot,item_id,count,nbt_variant", manifest[0])
-            assertEquals(3, manifest.size)
+            val uuid = UUID.randomUUID()
+            val layout = ExportLayout(
+                packPlayerSections(
+                    listOf(PlayerItem(uuid, PlayerSource.INVENTORY, 0, item("minecraft:stone", 1))),
+                    mapOf(uuid to "Alice"),
+                ),
+                packNonPlayer(emptyList(), ver, startZ = 3),
+            )
+            val manifest = dir.resolve("manifest.csv")
+            writeManifest(buildManifestRows(layout, ver), manifest)
+            val lines = Files.readAllLines(manifest)
+            assertEquals(
+                "kind,grid,player,source,barrel_x,barrel_z,barrel_slot,box_slot,source_slot,item_id,count,nbt_variant",
+                lines[0],
+            )
+            assertEquals(2, lines.size)
 
-            writeTotals(mapOf("minecraft:stone" to 70L), dir.resolve("totals.csv"))
-            val counts = dir.resolve("counts.csv")
-            Files.writeString(counts, "Type,Total,Number of Inventories\nminecraft:stone,70,1\n")
-            assertEquals(mapOf("minecraft:stone" to 70L), readCountsCsv(counts))
+            val totals = dir.resolve("totals.csv")
+            writeTotals(buildTotals(mapOf("minecraft:stone" to 3L), mapOf("minecraft:stone" to 2L)), totals)
+            assertEquals(
+                listOf("Type,Scanned,Exported,Dropped", "minecraft:stone,3,2,1"),
+                Files.readAllLines(totals),
+            )
         } finally {
             dir.toFile().deleteRecursively()
         }

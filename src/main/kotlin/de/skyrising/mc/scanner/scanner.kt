@@ -173,9 +173,14 @@ fun getHaystack(path: Path): Set<Scannable> {
         }
     }
 
-    // Players: 26.1+ uses players/data; earlier versions use playerdata.
-    addPlayerFiles(path.resolve("players/data"))
-    addPlayerFiles(path.resolve("playerdata"))
+    // Players: 26.1+ uses players/data; earlier versions use playerdata. Prefer
+    // the modern directory when it exists so upgraded worlds do not double-count.
+    val modernPlayers = path.resolve("players/data")
+    if (Files.isDirectory(modernPlayers)) {
+        addPlayerFiles(modernPlayers)
+    } else {
+        addPlayerFiles(path.resolve("playerdata"))
+    }
 
     // Regions: 26.1+ stores dimensions under dimensions/<namespace>/<dim>/region;
     // earlier versions use region/ (overworld), DIM-1/region (nether), DIM1/region (end).
@@ -228,7 +233,7 @@ fun evalScript(path: Path, scan: Scan): ResultWithDiagnostics<EvaluationResult> 
 
 fun runScript(path: Path, outPath: Path, outputs: Set<String>, executor: ExecutorService, needles: List<Needle>, script: Path) {
     LOOT_CONTAINERS.set(0)
-    val scan = Scan(outPath, needles, outputs)
+    val scan = Scan(path, outPath, needles, outputs)
     evalScript(script, scan).valueOrThrow()
     val haystack = getHaystack(path).filterTo(mutableSetOf(), scan.haystackPredicate)
     var totalSize = 0L

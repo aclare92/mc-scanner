@@ -61,6 +61,9 @@ class ItemRetentionTest {
     fun skipsSlotsWithoutId() {
         val empty = CompoundTag(mutableMapOf("count" to IntTag(1)))
         val real = stack("minecraft:stone", 1)
-        assertEquals(listOf(real), dumpItemStacksRaw(ListTag(listOf(empty, real))))
+        assertEquals(
+            listOf(real),
+            dumpItemStacksRaw(ListTag(listOf(empty, real))),
+        )
     }
 }

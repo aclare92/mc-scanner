@@ -48,6 +48,7 @@ fun scanInventory(slots: ListTag<CompoundTag>, needles: Collection<ItemType>, st
     val inventories = mutableListOf<Object2LongMap<ItemType>>(result)
     for (slot in slots) {
         if (!slot.has("id", Tag.STRING)) continue
+        if (isEmptyShulkerBox(slot, chunkVer)) continue
         val id = Identifier.of(slot.getString("id"))
         val contained = getSubResults(slot, needles, statsMode, chunkVer)
         val matchingTypes = byId[id]

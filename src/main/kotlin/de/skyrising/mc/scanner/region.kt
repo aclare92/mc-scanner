@@ -88,6 +88,47 @@ fun getBlockStates(section: CompoundTag, version: Int): LongArray? {
     return if (container.has("data", Tag.LONG_ARRAY)) container.getLongArray("data") else null
 }
 
+/** The block id at an absolute chunk position, e.g. `minecraft:red_shulker_box`, or null if unavailable. */
+fun blockIdAt(data: CompoundTag, version: Int, x: Int, y: Int, z: Int): String? {
+    val sectionsKey = if (version < DataVersion.REMOVE_LEVEL_TAG) "Sections" else "sections"
+    if (!data.has(sectionsKey, Tag.LIST)) return null
+    val sectionY = y shr 4
+    val section = data.getList<CompoundTag>(sectionsKey).firstOrNull { it.getInt("Y") == sectionY } ?: return null
+    val palette = getPalette(section, version) ?: return null
+    if (palette.isEmpty()) return null
+    val states = getBlockStates(section, version)
+    val index = (y and 15) * 256 + (z and 15) * 16 + (x and 15)
+    val paletteIndex = if (states == null) 0 else unpackBlockState(states, index, palette.size, version)
+    if (paletteIndex !in palette.indices) return null
+    return try {
+        BlockState.from(palette[paletteIndex], version).id.toString()
+    } catch (e: Exception) {
+        null
+    }
+}
+
+private fun unpackBlockState(states: LongArray, index: Int, paletteSize: Int, version: Int): Int {
+    val bits = maxOf(4, ceil(log2(paletteSize.toDouble())).toInt())
+    val mask = (1L shl bits) - 1
+    if (version < DataVersion.NON_PACKED_BLOCK_STATES) {
+        val perLong = 64 / bits
+        val longIndex = index / perLong
+        if (longIndex >= states.size) return -1
+        val offset = (index % perLong) * bits
+        return ((states[longIndex] ushr offset) and mask).toInt()
+    }
+    val start = index.toLong() * bits
+    val word = (start ushr 6).toInt()
+    val offset = (start and 63L).toInt()
+    if (word >= states.size) return -1
+    var value = states[word] ushr offset
+    if (offset + bits > 64) {
+        if (word + 1 >= states.size) return -1
+        value = value or (states[word + 1] shl (64 - offset))
+    }
+    return (value and mask).toInt()
+}
+
 fun scanChunk(results: MutableList<SearchResult>, blockIdNeedles: Set<BlockIdMask>, blockStateNeedles: Set<BlockState>, itemNeedles: Set<ItemType>, statsMode: Boolean, chunkPos: ChunkPos, version: Int, data: CompoundTag) {
     val dimension = chunkPos.dimension
     val flattened = version >= DataVersion.FLATTENING

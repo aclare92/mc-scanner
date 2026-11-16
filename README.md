@@ -33,3 +33,18 @@ Of only one region file:
 > java -jar mc-scanner-<version>.jar --stats <world>/region/r.92.-83.mca quarry-items.zip
 # 1/1 10.4MiB/10.4MiB 11.1MiB/s 51224 results
 ```
+
+### Exporting Items for Migration
+Into a directory:
+```shell
+> java -jar mc-scanner-<version>.jar --export <world directory> result/
+```
+
+The export writes `export.litematic`, `export.nbt`, `manifest.csv`, and `totals.csv`.
+Player inventories and ender chests are mirrored as-is into a labelled player grid;
+all other items are compacted into identity, bulk, remainder, and unstackable grids.
+Operator/command-only items are excluded from the export but remain in the scanned totals.
+See `.scratch/export/spec.md` for the full layout and manifest rules.
+
+`totals.csv` reports `Type,Scanned,Exported,Dropped`, where `Scanned` is the raw
+count of every item found, including empty boxes and excluded items.

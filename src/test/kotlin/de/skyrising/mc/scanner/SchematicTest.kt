@@ -6,6 +6,7 @@ import java.nio.file.Path
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class SchematicTest {
 
@@ -105,11 +106,11 @@ class SchematicTest {
     }
 
     @Test
-    fun litematicaPlacesSecondBarrelAtGap() = withTempDir { dir ->
+    fun litematicaPlacesSecondBarrelAdjacent() = withTempDir { dir ->
         val schematic = Schematic(
             listOf(
                 PlacedBarrel(0, 0, 0, listOf(shulker(listOf("minecraft:stone" to 1)))),
-                PlacedBarrel(2, 0, 0, listOf(shulker(listOf("minecraft:dirt" to 1)))),
+                PlacedBarrel(1, 0, 0, listOf(shulker(listOf("minecraft:dirt" to 1)))),
             ),
             dataVersion = 4671,
         )
@@ -117,15 +118,61 @@ class SchematicTest {
         schematic.writeLitematica(file)
 
         val region = readNbt(file).getCompound("Regions").getCompound("region")
-        assertEquals(3, region.getCompound("Size").getInt("x"))
+        assertEquals(2, region.getCompound("Size").getInt("x"))
         val states = region.getLongArray("BlockStates")
         assertEquals(1, unpack(states, 0, 2))
-        assertEquals(0, unpack(states, 1, 2)) // the 1-block air gap
-        assertEquals(1, unpack(states, 2, 2))
+        assertEquals(1, unpack(states, 1, 2))
 
         val tiles = region.getList<CompoundTag>("TileEntities")
         assertEquals(2, tiles.size)
-        assertEquals(2, tiles[1].getInt("x"))
+        assertEquals(1, tiles[1].getInt("x"))
+    }
+
+    @Test
+    fun signIsWrittenToBothFormats() = withTempDir { dir ->
+        val barrel = PlacedBarrel(0, 0, 0, listOf(shulker(listOf("minecraft:stone" to 1))))
+        val sign = PlacedSign(0, 0, 1, listOf("Alice", "Line 2"))
+        val litematic = dir.resolve("export.litematic")
+        Schematic(listOf(barrel), 4671, signs = listOf(sign)).writeLitematica(litematic)
+
+        val region = readNbt(litematic).getCompound("Regions").getCompound("region")
+        assertEquals(2, region.getCompound("Size").getInt("z"))
+        val palette = region.getList<CompoundTag>("BlockStatePalette")
+        assertEquals("minecraft:oak_wall_sign", palette[2].getString("Name"))
+        assertEquals("south", palette[2].getCompound("Properties").getString("facing"))
+        val tile = region.getList<CompoundTag>("TileEntities").single { it.getString("id") == "minecraft:sign" }
+        assertEquals(0, tile.getInt("x"))
+        assertEquals(0, tile.getInt("y"))
+        assertEquals(1, tile.getInt("z"))
+        assertEquals(listOf("Alice", "Line 2", "", ""),
+            tile.getCompound("front_text").getList<StringTag>("messages").map { it.value })
+        assertEquals(0, tile.getInt("is_waxed"))
+
+        val vanilla = dir.resolve("export.nbt")
+        Schematic(listOf(barrel), 4671, signs = listOf(sign)).writeVanillaStructure(vanilla)
+        val signBlock = readNbt(vanilla).getList<CompoundTag>("blocks")
+            .single { it.getInt("state") == 2 }
+        assertEquals(listOf(0, 0, 1), signBlock.getList<IntTag>("pos").map { it.value })
+        val nbt = signBlock.getCompound("nbt")
+        assertEquals("minecraft:sign", nbt.getString("id"))
+        assertTrue(!nbt.containsKey("x"))
+        assertEquals(listOf("Alice", "Line 2", "", ""),
+            nbt.getCompound("front_text").getList<StringTag>("messages").map { it.value })
+    }
+
+    @Test
+    fun explicitBarrelSlotsPreserveGaps() = withTempDir { dir ->
+        val barrel = PlacedBarrel(
+            0, 0, 0,
+            listOf(shulker(listOf("minecraft:stone" to 1)), shulker(listOf("minecraft:dirt" to 1))),
+            slots = listOf(5, 10),
+        )
+        val file = dir.resolve("export.litematic")
+        Schematic(listOf(barrel), 4671).writeLitematica(file)
+
+        val items = readNbt(file).getCompound("Regions").getCompound("region")
+            .getList<CompoundTag>("TileEntities").single().getList<CompoundTag>("Items")
+        assertEquals(listOf(5, 10), items.map { it.getInt("Slot") })
     }
 
     @Test
@@ -133,7 +180,7 @@ class SchematicTest {
         val schematic = Schematic(
             listOf(
                 PlacedBarrel(0, 0, 0, listOf(shulker(listOf("minecraft:stone" to 64)))),
-                PlacedBarrel(2, 0, 0, listOf(shulker(listOf("minecraft:dirt" to 5)))),
+                PlacedBarrel(1, 0, 0, listOf(shulker(listOf("minecraft:dirt" to 5)))),
             ),
             dataVersion = 4671,
         )
@@ -143,7 +190,7 @@ class SchematicTest {
         val root = readNbt(file)
         assertEquals(4671, root.getInt("DataVersion"))
         val size = root.getList<IntTag>("size")
-        assertEquals(listOf(3, 1, 1), size.map { it.value })
+        assertEquals(listOf(2, 1, 1), size.map { it.value })
 
         val palette = root.getList<CompoundTag>("palette")
         assertEquals("minecraft:air", palette[0].getString("Name"))
@@ -153,7 +200,7 @@ class SchematicTest {
         assertEquals(2, blocks.size)
         assertEquals(1, blocks[0].getInt("state"))
         assertEquals(listOf(0, 0, 0), blocks[0].getList<IntTag>("pos").map { it.value })
-        assertEquals(listOf(2, 0, 0), blocks[1].getList<IntTag>("pos").map { it.value })
+        assertEquals(listOf(1, 0, 0), blocks[1].getList<IntTag>("pos").map { it.value })
         assertEquals("minecraft:barrel", blocks[1].getCompound("nbt").getString("id"))
         assertEquals(1, blocks[1].getCompound("nbt").getList<CompoundTag>("Items").size)
     }
