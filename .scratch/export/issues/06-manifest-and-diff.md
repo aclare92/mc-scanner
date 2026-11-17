@@ -10,7 +10,7 @@ Emit the granular manifest, the diffable totals, and a losslessness check so the
 
 ## Requirements
 
-1. **`manifest.csv`** — header `barrel_x,barrel_z,shulker_slot,item_id,count,nbt_variant`; one row per occupied slot (recursing into `minecraft:container` to enumerate the actual items inside each shulker box). `nbt_variant` is the existing `itemStackNbt` SNBT string.
+1. **`manifest.csv`** — header `barrel_x,barrel_z,shulker_slot,item_id,count,nbt_variant`; one row per item inside each shulker box (recursing into `minecraft:container`). `nbt_variant` is the existing `itemStackNbt` SNBT string. `boxes.csv` lists the boxes themselves (name/colour, no contents) so they can be located too; see ticket `10`.
 2. **`totals.csv`** — schema `Type,Total` (same as the report's `counts.csv`), summing every item **recursing through `minecraft:container`** so it is directly comparable to `counts.csv`.
 3. **Summary line** on completion: total item stacks, total item count, total barrels.
 4. **Diff**: when a report `counts.csv` is available in the output dir, print types present in one file but not the other, and any count mismatches. This is the losslessness proof.

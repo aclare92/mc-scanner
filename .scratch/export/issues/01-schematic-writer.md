@@ -36,7 +36,7 @@ Both are **gzip-compressed big-endian binary NBT** with an unnamed root compound
    - Each `TileEntities` element: `{id:"minecraft:barrel", x,y,z (region-local), Items:[ {Slot:0b, id:"minecraft:shulker_box", count:1, components:{...}}, ... ]}`. `Slot` is **Byte**; empty slots omitted.
 2. **Vanilla structure**:
    - Root: `DataVersion` (same as `MinecraftDataVersion`), `size:[sx,1,sz]`, `palette:[{Name:"minecraft:air"}, {Name:"minecraft:barrel", Properties:{...}}]`, `blocks:[{state, pos:[x,y,z], nbt:{...}}]` for each barrel (block-entity `nbt` has `id`+`Items`, **no** x/y/z).
-3. **Layout** (from spec Q8): flat grid, y=0, barrels in rows along X, 1-block air gap between adjacent barrels in X and Z. First barrel at `(0,0,0)`.
+3. **Layout** (from spec Q8): flat grid, y=0, barrels in rows along X, directly adjacent with no gaps. First barrel at `(0,0,0)`.
 4. Use the existing `Tag`/`CompoundTag`/`ListTag` types and `Tag.write(out)`; only the gzip wrapper is new.
 
 ## Acceptance criteria
@@ -55,6 +55,6 @@ Both are **gzip-compressed big-endian binary NBT** with an unnamed root compound
 
 ## Comments
 
-- **Implemented.** `src/main/kotlin/de/skyrising/mc/scanner/schematic.kt` (`PlacedBarrel`, `Schematic`, `toLitematicaNbt`, `toVanillaStructureNbt`, `writeLitematica`, `writeVanillaStructure`) with `src/test/kotlin/de/skyrising/mc/scanner/SchematicTest.kt`. Covers single-barrel round-trip, a second barrel at a 1-block gap, and the vanilla structure shape. `./gradlew build` passes (28 tests).
+- **Implemented.** `src/main/kotlin/de/skyrising/mc/scanner/schematic.kt` (`PlacedBarrel`, `Schematic`, `toLitematicaNbt`, `toVanillaStructureNbt`, `writeLitematica`, `writeVanillaStructure`) with `src/test/kotlin/de/skyrising/mc/scanner/SchematicTest.kt`. Covers single-barrel round-trip, a second adjacent barrel, and the vanilla structure shape. `./gradlew build` passes (28 tests).
 - **Latent bug found and fixed in `nbt.kt`.** `Tag.Companion`'s `init` registered tag readers by dereferencing each tag's companion object (e.g. `IntTag.Companion`). When `Tag.read(...)` was the very first `Tag` access, that companion could still be `null` mid-initialization, leaving `getReader(INT)` null and every read NPE-ing. `getReader` now resolves readers at call time via a `when`, and `init` only records the class→id map. This was pre-existing but only surfaced once a test read NBT on a cold class-init path.
 - Note: region `Position` is `{0,0,0}` (schematic origin); tile-entity coordinates are region-local. Do not write `max_stack_size`.

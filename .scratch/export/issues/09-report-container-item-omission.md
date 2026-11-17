@@ -56,5 +56,6 @@ export diff compared against `exportTotals` directly.
 
 - **Owner decision: count everything.** Removed the `contained.isEmpty()` guard in `scanInventory`: stats mode now counts a container item in addition to recursing into its contents. `reportEquivalentTotals` was deleted; the export diff now compares `counts.csv` against `exportTotals` directly.
 - Tests: `statsModeCountsContainerAndContents`, `statsModeCountsChargedCrossbowAndProjectiles`, plus `totalsCountContainerAndContents`. `./gradlew test` passes (52 tests).
+- **Later exception:** empty shulker boxes are excluded from the report and export (ticket `11`). Container items with contents are still counted in addition to their contents.
 - Re-validated end-to-end on `test-data/worlds/26.3/`: `counts.csv` now lists `minecraft:shulker_box` (1), `minecraft:cyan_bundle` (1) and `minecraft:crossbow` (3), and the export's losslessness check passes against the complete totals.
 - `GLOSSARY.md` `report` entry documents the rule. Note this changes `counts.csv`/`stats.csv`/`nbt.csv` numbers for worlds containing filled containers.
